@@ -52,6 +52,7 @@ sudo usermod -aG plugdev,dialout $USER     # затем перелогинить
 | esptool | `plugins/esptool_flash.py` | `mcu.esp` | GPL-2.0 | `pipx install esptool` (на Raspberry Pi OS системный pip закрыт) |
 | binwalk | `core/checks.py` → `binwalk`, `binwalk_expect` | любой | MIT | `sudo apt install binwalk` (2.x) или 3.x через cargo |
 | sigrok-cli | `extras/sigrok.py` (`python3 -m dirizher.extras.sigrok`) | — | GPL-3.0 | `sudo apt install sigrok-cli` |
+| Modbus RTU (0.4.0, навык) | `skills/modbus_rtu/skill.py` + `rtu.py` | `device.modbus` | — (свой код, stdlib) | ничего; переходник USB–RS-485, пользователь в группе `dialout` |
 
 Общие ключи любого лезвия в `config.yaml` (образец — `docs/config-snippet-0.3.0.yaml`): `enabled`, `programmer_voltage` (своё напряжение
 адаптера), `extra_args` (доп. параметры; опасные отклоняются), `probe_timeout`/`read_timeout`/`write_timeout`.
@@ -138,6 +139,24 @@ sudo usermod -aG plugdev,dialout $USER     # затем перелогинить
 - Запись `.sr` и расшифровка `.txt` — в `data/captures/`, сеанс вида `capture` — в истории и журнале.
 - **Безопасность:** только приём сигналов. Входы дешёвых анализаторов — до 5 В.
 - **ПРОВЕРИТЬ НА ЖЕЛЕЗЕ:** драйвер вашего анализатора и синтаксис декодера (`sigrok-cli -P spi --show`).
+
+### 4.9. Modbus RTU — приборы по RS-485 (навык, 0.4.0)
+- **Даёт:** чтение и смену настроек термопреобразователей, регуляторов, счётчиков: «Настройка параметров»
+  по карте профиля, копия «до/после», сверка, откат, эталон настроек.
+- **Как устроено:** навык `skills/modbus_rtu`, помощник-процесс `rtu.py` (stdlib, termios): функции 3/4 — чтение,
+  6 (или 16 при `write_function: 16`) — запись, CRC, повторы, `--echo` для переходников с эхом.
+  Прибор = окно регистров настроек (`bus: start, count, function` в профиле); пишутся только изменившиеся регистры.
+- **Настройки** (`skill.yaml` → `settings` или `config.yaml` → `plugins: modbus_rtu`): `enabled`, `port`, `baud`,
+  `parity`, `stopbits`, `unit`, `model`, `timeout`, `retries`, `write_function`, `echo`.
+- **Опознание:** чтение одного регистра; модель задаёт человек (`model`) → уверенность 0.7. Напряжение логики
+  не сверяется (`voltage_check = False`): прибор питается сам, шина развязана — вместо вопроса напоминание о проводке.
+- **Защита:** значения вне min/max, не по шагу, «только чтение» → запись не начнётся; живые регистры в окне →
+  повторные чтения не совпадут → запись заблокирована; прибор не принял значение → сверка не совпала →
+  предложен возврат копии «до».
+- **ПРОВЕРИТЬ НА ЖЕЛЕЗЕ:** эхо переходника, паузы между кадрами на вашей скорости, поддержку функции 16,
+  карту регистров своего прибора (учебная `thermo_example.yaml` — адреса придуманы).
+- **Тесты:** `tests/fakes/modbus_emulator.py` (прибор на псевдотерминале: 3/4/6/16, исключения, «молчит»,
+  «живой» и «упрямый» регистры), `tests/test_params.py`.
 
 ## 5. Изменение ядра (одно) и почему
 

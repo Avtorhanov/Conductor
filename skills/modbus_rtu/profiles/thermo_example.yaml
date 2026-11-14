@@ -1,0 +1,88 @@
+# ПРИМЕР карты параметров термопреобразователя (Modbus RTU).
+# Адреса регистров придуманы для примера и учебного эмулятора — у вашего прибора они ДРУГИЕ.
+# Возьмите их из паспорта (раздел «Протокол Modbus» / «Карта регистров»).   ПРОВЕРИТЬ НА ЖЕЛЕЗЕ:
+# сначала «Прочитать параметры» и сверить с экраном прибора, только потом менять.
+id: thermo_example
+name: Термопреобразователь (пример карты Modbus)
+class: device.modbus
+match:
+  name: THERMO-EXAMPLE         # = model в настройках лезвия
+priority: 20
+voltage: null                  # прибор питается сам: напряжение не сверяется (лезвие RS-485)
+allow_write: true
+
+bus:                           # окно чтения — ТОЛЬКО регистры настроек (без измеряемой температуры)
+  start: 0
+  count: 8
+  function: 3                  # holding registers
+
+params:
+  - id: sensor_type
+    title: Тип датчика
+    register: 0
+    type: u16be
+    choices: {0: Pt100, 1: Pt1000, 2: "термопара K"}
+  - id: units
+    title: Единицы
+    register: 1
+    type: u16be
+    choices: {0: "°C", 1: "°F"}
+  - id: range_low
+    title: Нижняя граница диапазона
+    register: 2
+    type: i16be
+    scale: 0.1
+    unit: "°C"
+    min: -200
+    max: 1300
+    help: Значение, которому соответствует 4 мА на выходе.
+  - id: range_high
+    title: Верхняя граница диапазона
+    register: 3
+    type: i16be
+    scale: 0.1
+    unit: "°C"
+    min: -200
+    max: 1300
+    help: Значение, которому соответствует 20 мА на выходе.
+  - id: filter
+    title: Фильтр (усреднение)
+    register: 4
+    type: u16be
+    unit: с
+    min: 0
+    max: 60
+  - id: address
+    title: Сетевой адрес
+    register: 5
+    type: u16be
+    writable: false
+    help: Меняйте в меню прибора — после смены адреса связь по старому пропадёт и сверка не пройдёт.
+  - id: baud_code
+    title: Код скорости обмена
+    register: 6
+    type: u16be
+    writable: false
+    help: Меняйте в меню прибора — по той же причине, что и адрес.
+  - id: fw_version
+    title: Версия прошивки прибора
+    register: 7
+    type: u16be
+    writable: false
+
+# Эталон настроек: снимите копию с правильно настроенного прибора — по ней можно настроить такой же.
+# Адрес и скорость берутся с текущего прибора, а не из эталона.
+preserve:
+  - offset: 10                 # регистры 5–6 (адрес и скорость) = байты 10…13
+    length: 4
+    why: сетевой адрес и скорость этого прибора
+checks:
+  - stable_read
+  - compare_reference
+recipes:
+  - id: restore_reference
+    title: Настроить как у эталона (адрес и скорость сохраняются)
+    action: write_reference
+notes: |
+  Учебный пример для навыка modbus_rtu и эмулятора в тестах. Для настоящего прибора сделайте свою
+  карту: «Навыки» → «+» → «Карта параметров».

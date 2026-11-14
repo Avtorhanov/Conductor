@@ -1,0 +1,20 @@
+# Общий профиль: любой прибор по Modbus RTU, для которого ещё нет карты параметров.
+# Позволяет снять копию окна регистров и сравнить с эталоном. Запись выключена: без карты
+# неизвестно, что означают регистры.
+id: generic_modbus
+name: Прибор Modbus RTU (общий профиль, без карты)
+class: device.modbus
+match: {}
+priority: 0
+voltage: null
+allow_write: false
+bus:
+  start: 0
+  count: 16
+  function: 3
+checks:
+  - stable_read
+  - compare_reference
+recipes: []
+notes: |
+  Добавьте карту параметров: «Навыки» → «+» → «Карта параметров» (справка «Параметры прибора»).

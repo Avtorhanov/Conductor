@@ -30,12 +30,14 @@ sigrok, binwalk, Bus Pirate…) НЕ встраиваются: они вызыв
 
 АРХИТЕКТУРА
 - dirizher/__main__.py — команды: plugins, profiles, detect, run [--dry-run --image --label], history,
-  show, feedback, reference, rollback, export, sim. Флаг --sim — учебный режим с отдельной памятью.
+  show, feedback, reference, rollback, export, sim, params, tune --set, skills, doctor [--heal], help,
+  web, wizard. Флаг --sim — учебный режим с отдельной памятью.
 - core/pipeline.py — класс Conductor, единый сценарий из 7 шагов: подготовка → опознание (только
   чтение ID) → проверка напряжения → копия «до» (≥2 чтения, сверка хешей) → уточнение платы по
   содержимому → диагностика → план (рецепты по рейтингу) → подтверждение словом → запись → чтение
   обратно и сверка → копия «после» → отзыв «заработало?». Плюс rollback, detect_only,
-  mark_reference, export. Запись — ТОЛЬКО через Conductor.apply().
+  mark_reference, export, read_params и tune (настройка параметров по карте профиля: копия «до» →
+  «было → стало» → слово → apply). Запись — ТОЛЬКО через Conductor.apply().
 - core/plugin.py — интерфейс плагина: available() / probe() / read(det) / write(det, data);
   self.run(cmd, timeout) для внешних программ. Атрибуты: name, title, target_class, hardware.
 - core/registry.py — автопоиск плагинов в dirizher/plugins/ (файлы на «_» не грузятся). В режиме
@@ -43,7 +45,9 @@ sigrok, binwalk, Bus Pirate…) НЕ встраиваются: они вызыв
 - core/profiles.py — YAML-профили: чип (match по отпечатку, например jedec_id), плата (content_match
   по сигнатуре в дампе + preserve — уникальные области: MAC, серийник), общий (пустой match,
   уверенность 0.3). Поля: id, name, class, match, content_match, priority, voltage, size, allow_write,
-  checks, recipes (action: write_reference | write_image), preserve, notes.
+  checks, recipes (action: write_reference | write_image), preserve, notes, params (карта параметров,
+  core/params.py), bus (окно шины для лезвия). Профили навыков (skills/<id>/profiles/) грузятся тоже.
+- core/skills.py — навыки skills/<id>/ (skill.yaml, skill.py, profiles/, help.md) и сторож кода (lint).
 - core/checks.py — проверки с @register: stable_read, not_zero, not_blank, size_matches, magic,
   compare_reference (посекторно, 4 КБ, без учёта preserve), binwalk. Статусы: ok, info, warn, fail
   (с suggest — id рецептов), block (запись запрещена).
@@ -55,8 +59,11 @@ sigrok, binwalk, Bus Pirate…) НЕ встраиваются: они вызыв
   (s+1)/(s+f+2), учёт отзывов.
 - core/ui.py — весь ввод-вывод: ConsoleUI; AutoUI — для тестов. Будущий веб-интерфейс заменит
   только этот слой.
-- plugins/: flashrom_spi (SPI NOR через внешний flashrom), simulator (виртуальная W25Q64 с учебными
-  поломками), _template.
+- plugins/: flashrom_spi, simulator, probe_rs, openocd, avrdude, esptool_flash, minipro, bp5_i2c, _common,
+  _template. Навыки: skills/modbus_rtu (Modbus RTU по RS-485, помощник rtu.py).
+- interface/: Штурман (guide.yaml, guide.py), браузер (web.py, static/index.html), мастер, конструктор.
+- workshop/: капот (hood.py: правка навыков/профилей/лезвий/Штурмана/справки с проверкой и историей;
+  ядро — только просмотр), skillmaker.py, helpdocs.py (help/*.md), doctor.py (самопроверка и самоисцеление).
 - profiles/chips, profiles/boards; tests/test_pipeline.py — сценарии на симуляторе.
 - Документация: README.md, PRINCIPLES.md, docs/START.md, docs/MANUAL.md, docs/STATUS.md, CHANGELOG.md.
 

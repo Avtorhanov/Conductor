@@ -4,12 +4,15 @@
   * копию невозможно незаметно подменить — при чтении хеш проверяется заново;
   * одинаковые дампы не занимают место дважды;
   * файлы ставятся «только для чтения», программа их никогда не удаляет;
-  * при желании каждая копия дублируется во второе место (mirror_dir).
+  * при желании каждая копия дублируется во второе место (mirror_dir);
+  * самоисцеление (repair): испорченная или пропавшая копия восстанавливается из второго места,
+    испорченный файл не удаляется, а переносится в карантин.
 """
 from __future__ import annotations
 
 import hashlib
 import os
+import time
 from pathlib import Path
 
 
@@ -75,3 +78,44 @@ class BackupStore:
         dest = Path(dest)
         dest.write_bytes(self.get(sha))
         return dest
+
+    # ---------- самопроверка и самоисцеление ----------
+    def _state(self, base: Path | None, sha: str) -> str:
+        if base is None:
+            return "off"
+        p = self._path(base, sha)
+        if not p.exists():
+            return "missing"
+        return "ok" if sha256(p.read_bytes()) == sha else "bad"
+
+    def has(self, sha: str) -> bool:
+        """Есть ли файл копии в основном хранилище (без пересчёта хеша — быстро)."""
+        return self._path(self.root, sha).exists()
+
+    def health(self, sha: str) -> dict:
+        """Состояние копии: {"primary": ok|missing|bad, "mirror": ok|missing|bad|off}."""
+        return {"primary": self._state(self.root, sha), "mirror": self._state(self.mirror, sha)}
+
+    def repair(self, sha: str, quarantine: Path) -> list:
+        """Восстановить копию там, где она испорчена или пропала, из исправного места.
+
+        Ничего не удаляется: испорченный файл переносится в quarantine. Возвращает список действий."""
+        state = self.health(sha)
+        good = self.root if state["primary"] == "ok" else self.mirror if state["mirror"] == "ok" else None
+        if good is None:
+            raise IntegrityError(f"копия {sha[:12]}… испорчена везде — восстановить не из чего")
+        data = self._path(good, sha).read_bytes()
+        done = []
+        for name, base in (("основное хранилище", self.root), ("второе место", self.mirror)):
+            st = state["primary" if base is self.root else "mirror"]
+            if base is None or st == "ok":
+                continue
+            path = self._path(base, sha)
+            if st == "bad":
+                quarantine.mkdir(parents=True, exist_ok=True)
+                dest = quarantine / f"{sha}.{time.strftime('%Y%m%d-%H%M%S')}.{'mirror' if base is self.mirror else 'main'}.bin"
+                os.replace(path, dest)
+                done.append(f"{name}: испорченный файл перенесён в карантин ({dest.name})")
+            self._write(base, sha, data)
+            done.append(f"{name}: копия {sha[:12]}… восстановлена")
+        return done

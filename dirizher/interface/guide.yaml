@@ -12,7 +12,10 @@
 #
 # Действия: run (dry_run, label, image), detect, rollback (dry_run), feedback,
 #   reference (label), export, sim (do: status|reset|corrupt|erase|flaky|steady),
-#   history, plugins, profiles, roadmap, builder, capture (scan: true — найти анализатор).
+#   history, plugins, profiles, roadmap, builder, capture (scan: true — найти анализатор),
+#   params (прочитать параметры прибора), tune (set: {параметр: значение}), tune_form,
+#   skills (вкладка «Навыки»), help (article: имя статьи), hood (area: guide|work|log|dev|device|help),
+#   doctor (самопроверка), fix (что помогло).
 #   Значение «ask» в params — спросить у человека (метку или файл образа).
 #   Для rollback, feedback, reference, export сеанс выбирается из журнала.
 #
@@ -38,6 +41,10 @@ nodes:
         label: Узнать, что за микросхема
         explain: только чтение идентификатора, ничего не меняется
         action: detect
+      - icon: "🎛"
+        label: Настроить прибор
+        explain: диапазон, уставка, единицы — по карте параметров
+        next: tune
       - icon: "↩️"
         label: Вернуть как было
         explain: записать обратно копию «до» из прошлого сеанса
@@ -60,12 +67,32 @@ nodes:
         next: sim
       - icon: "🛠"
         label: Развивать Дирижёр
-        explain: новые чипы, платы, проверки, инструменты — с примерами
+        explain: навыки, капот, профили, проверки — с примерами
         next: develop
       - icon: "❓"
         label: Что-то не получается
         explain: частые проблемы и как их решить
         next: trouble
+
+  tune:
+    ask: Настройка прибора
+    say: Параметры читаются и меняются по карте из профиля. Перед записью — копия текущих настроек, после — сверка. Значения сверяйте с паспортом прибора.
+    options:
+      - label: Прочитать параметры
+        explain: только чтение — сверьте значения с экраном прибора
+        action: params
+      - label: Изменить параметры
+        explain: по последнему чтению; запись после слова «ДА»
+        action: tune_form
+      - label: "Пример: сменить диапазон термодатчика"
+        explain: Modbus RTU по RS-485 — по шагам
+        action: help
+        params: {article: example_thermo}
+      - label: Прибора нет в списке — добавить карту или протокол
+        explain: Навыки → + (карта параметров без кода или новое лезвие)
+        action: skills
+      - label: Вернуть прежние настройки
+        action: rollback
 
   repair:
     ask: Что есть для ремонта?
@@ -183,8 +210,20 @@ nodes:
 
   develop:
     ask: Что развиваем?
-    say: Правило слоёв — новый чип или плата = новый профиль (YAML), новый инструмент = новый плагин. Ядро при этом не меняется.
+    say: Правило слоёв — новый чип или плата = новый профиль (YAML), новый инструмент = навык или плагин. Ядро при этом не меняется.
     options:
+      - icon: "🧠"
+        label: Навыки — добавить и править
+        explain: протокол, карта параметров, проверка — без правки ядра
+        action: skills
+      - icon: "⌨"
+        label: Капот — код и настройки разделов
+        explain: правка с проверкой, историей и откатом
+        action: help
+        params: {article: hood}
+      - label: Самопроверка и самоисцеление
+        explain: копии, память, профили, навыки — и починка
+        action: doctor
       - icon: "🧭"
         label: Что делать дальше по плану
         explain: следующие шаги из docs/STATUS.md
@@ -215,6 +254,9 @@ nodes:
   trouble:
     ask: Что случилось?
     options:
+      - label: Самопроверка — найти и починить
+        explain: копии, память, профили, навыки, Штурман
+        action: doctor
       - label: Не видит микросхему
         lesson: not_detected
       - label: Чтения не совпадают, запись заблокирована
@@ -810,7 +852,7 @@ lessons:
                 - Снимите радиатор, читайте выпаянный чип.
                 - text: Сначала план без записи
                   code: python3 -m dirizher run --dry-run
-      - Действия — run (dry_run, label, image), detect, rollback, feedback, export, sim (do), history, plugins, profiles, roadmap, builder.
+      - Действия — run (dry_run, label, image), detect, rollback, feedback, export, sim (do), history, plugins, profiles, roadmap, builder, params, tune, tune_form, skills, help (article), hood (area), doctor, fix.
       - text: Проверьте файл — тест ловит опечатки в ссылках.
         code: python3 -m unittest tests.test_interface -v
     check: Обновите страницу в браузере (или перезапустите мастер) — новый вариант на месте.

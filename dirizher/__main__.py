@@ -14,7 +14,8 @@ from .core.pipeline import OUTCOMES, Conductor
 from .core.ui import ConsoleUI
 
 ROOT = Path(__file__).resolve().parent.parent
-KIND_RU = {"run": "ремонт", "detect": "опознание", "rollback": "откат"}
+KIND_RU = {"run": "ремонт", "detect": "опознание", "rollback": "откат", "params": "параметры",
+           "tune": "настройка", "capture": "замер"}
 
 
 def cmd_plugins(c, a):
@@ -90,6 +91,45 @@ def cmd_export(c, a):
     c.export(a.session, a.kind, a.to)
 
 
+def cmd_params(c, a):
+    c.read_params()
+
+
+def cmd_tune(c, a):
+    changes = {}
+    for item in a.set or []:
+        key, sep, value = item.partition("=")
+        if not sep or not key.strip():
+            c.ui.error(f"«{item}»: пишите параметр=значение, например range_high=600")
+            return 1
+        changes[key.strip()] = value.strip()
+    if not changes:
+        c.ui.error("укажите хотя бы одно --set параметр=значение (список — команда params)")
+        return 1
+    c.tune(changes)
+
+
+def cmd_skills(c, a):
+    from .interface.guide import skills_info
+    info = skills_info(c)
+    c.ui.header(f"Навыки ({c.skills.root})")
+    if not info["items"] and not info["broken"]:
+        c.ui.info("пока нет. Новый: python3 -m dirizher web → «Навыки» → «+», или скопируйте skills/modbus_rtu")
+    for sk in info["items"]:
+        mark = "✖" if sk["errors"] else ("✔" if sk["enabled"] else "·")
+        c.ui.out(f" {mark} {sk['id']:<16} {sk['title']} [{sk['kind']}]")
+        for pl in sk["plugins"]:
+            c.ui.info(f"лезвие {pl['name']}: {pl['status']}")
+        if sk["profiles"]:
+            c.ui.info("профили: " + ", ".join(sk["profiles"]))
+        for e in sk["errors"]:
+            c.ui.error(e)
+        for w in sk["warnings"]:
+            c.ui.warn(w)
+    for b in info["broken"]:
+        c.ui.error(f"{b['path']}: {b['error']}")
+
+
 def cmd_sim(c, a):
     sim = c.plugin("simulator")
     c.ui.ok(getattr(sim, f"do_{a.action}")())
@@ -99,6 +139,7 @@ COMMANDS = {
     "plugins": cmd_plugins, "profiles": cmd_profiles, "detect": cmd_detect, "run": cmd_run,
     "history": cmd_history, "show": cmd_show, "feedback": cmd_feedback, "reference": cmd_reference,
     "rollback": cmd_rollback, "export": cmd_export, "sim": cmd_sim,
+    "params": cmd_params, "tune": cmd_tune, "skills": cmd_skills,
 }
 
 
@@ -150,9 +191,38 @@ def build_parser() -> argparse.ArgumentParser:
     ex.add_argument("--kind", default="before", choices=["before", "after", "written"])
     ex.add_argument("--to", required=True, help="куда сохранить, например ~/dump.bin")
 
+    sub.add_parser("params", help="прочитать параметры прибора по карте профиля (только чтение)")
+    tu = sub.add_parser("tune", help="изменить параметры прибора: копия «до», план, запись после «ДА»")
+    tu.add_argument("--set", action="append", metavar="ПАРАМЕТР=ЗНАЧЕНИЕ", help="например range_high=600")
+    tu.add_argument("--dry-run", action="store_true", help="показать план, ничего не записывая")
+    sub.add_parser("skills", help="навыки: что загружено и что сломано")
+    dr = sub.add_parser("doctor", help="самопроверка: копии, память, профили, навыки, Штурман")
+    dr.add_argument("--heal", action="store_true", help="исправить то, что исправляется без догадок")
+    hp = sub.add_parser("help", help="справка: статьи и уроки (без слов — список)")
+    hp.add_argument("words", nargs="*", help="поиск или имя статьи")
     sm = sub.add_parser("sim", help="управление виртуальной микросхемой (учебные поломки)")
     sm.add_argument("action", choices=["status", "reset", "corrupt", "erase", "flaky", "steady"])
     return p
+
+
+def cmd_help(cfg, words: list) -> int:
+    from .workshop import helpdocs
+    ui = ConsoleUI()
+    query = " ".join(words)
+    art = helpdocs.article(cfg, query) if len(words) == 1 else None
+    if art is not None:
+        ui.header(art["title"])
+        ui.out(art["text"].rstrip())
+        return 0
+    items = helpdocs.search(helpdocs.articles(cfg), query)
+    ui.header("Справка" + (f": «{query}»" if query else ""))
+    if not items:
+        ui.info("ничего не нашлось")
+    for it in items[:40]:
+        name = it["id"] if it["kind"] == "article" else f"(урок) {it['lesson']}"
+        ui.out(f" • {it['title']}  [{name}]")
+    ui.info("статья целиком: python3 -m dirizher help <имя>")
+    return 0
 
 
 def main(argv=None) -> int:
@@ -173,6 +243,11 @@ def main(argv=None) -> int:
     if args.cmd == "web":
         from .interface.web import serve
         return serve(cfg, host=args.host, port=args.port, sim=args.sim)
+    if args.cmd == "doctor":
+        from .workshop import doctor
+        return doctor.main(cfg, sim=args.sim, do_heal=args.heal)
+    if args.cmd == "help":
+        return cmd_help(cfg, args.words)
     ui = ConsoleUI()
     c = Conductor(cfg, ui, sim=args.sim, dry_run=getattr(args, "dry_run", False))
     try:
