@@ -1,0 +1,30 @@
+# Служба: веб-интерфейс «Дирижёра» запускается при включении прибора.
+# ПРОВЕРИТЬ НА ЖЕЛЕЗЕ: поправьте User и пути под свою установку.
+#
+# Установка:
+#   sudo cp system/dirizher-web.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now dirizher-web
+# Посмотреть адрес и код доступа:   journalctl -u dirizher-web -n 20
+# Остановить:                       sudo systemctl stop dirizher-web
+#   (если идёт запись, служба дождётся её окончания — не выключайте питание)
+
+[Unit]
+Description=Дирижёр — веб-интерфейс (ПК, телефон, экран прибора)
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+Group=plugdev
+WorkingDirectory=/home/pi/dirizher
+ExecStart=/usr/bin/python3 -m dirizher web
+Environment=PYTHONUNBUFFERED=1
+Restart=on-failure
+RestartSec=5
+# Запись прошивки нельзя прерывать: даём время закончить текущую операцию.
+KillSignal=SIGINT
+TimeoutStopSec=1900
+
+[Install]
+WantedBy=multi-user.target

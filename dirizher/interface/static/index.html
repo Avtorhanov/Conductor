@@ -1,0 +1,1123 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e1116">
+<meta name="color-scheme" content="dark light">
+<title>Дирижёр</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22%3E%3Crect width=%2224%22 height=%2224%22 rx=%225%22 fill=%22%230e1116%22/%3E%3Cpath d=%22M5 19L16 8%22 stroke=%22%23e8b04a%22 stroke-width=%222.4%22 stroke-linecap=%22round%22/%3E%3Ccircle cx=%2217.5%22 cy=%226.5%22 r=%222.2%22 fill=%22%23e8b04a%22/%3E%3C/svg%3E">
+<style>
+/* «Дирижёр» — одна страница для любого экрана: телефон, ПК, сенсорный экран прибора.
+   Без внешних шрифтов и библиотек: работает без интернета. */
+:root {
+  --bg: #0e1116; --surface: #161b22; --surface2: #1d242e; --line: #2a333f;
+  --text: #e8edf2; --muted: #8e9aa7; --accent: #e8b04a; --accent-ink: #1b1405;
+  --ok: #3fb950; --warn: #d9a33a; --bad: #f2645a; --info: #6aa9f5; --sim: #b48cf2;
+  --ok-bg: rgba(63,185,80,.12); --warn-bg: rgba(217,163,58,.14); --bad-bg: rgba(242,100,90,.13);
+  --info-bg: rgba(106,169,245,.12); --sim-bg: rgba(180,140,242,.14);
+  --radius: 14px; --scale: 1; --tabs-h: 64px;
+  --mono: ui-monospace, "SFMono-Regular", "DejaVu Sans Mono", Menlo, Consolas, monospace;
+  font-size: calc(16px * var(--scale));
+}
+:root[data-theme="light"] {
+  --bg: #f5f3ee; --surface: #ffffff; --surface2: #f0ede6; --line: #ddd8cc;
+  --text: #1d2228; --muted: #67707a; --accent: #b7791f; --accent-ink: #ffffff;
+  --ok: #1f8a3a; --warn: #a36a00; --bad: #c8382d; --info: #2f6fbf; --sim: #7b4fc4;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f5f3ee; --surface: #ffffff; --surface2: #f0ede6; --line: #ddd8cc;
+    --text: #1d2228; --muted: #67707a; --accent: #b7791f; --accent-ink: #ffffff;
+    --ok: #1f8a3a; --warn: #a36a00; --bad: #c8382d; --info: #2f6fbf; --sim: #7b4fc4;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 1rem/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "DejaVu Sans", sans-serif;
+  -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent;
+}
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+a { color: var(--info); }
+[hidden] { display: none !important; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- каркас ---------- */
+.top {
+  position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: .6rem;
+  padding: calc(.55rem + env(safe-area-inset-top)) 1rem .55rem; background: var(--bg);
+  border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: center; gap: .5rem; font-weight: 700; letter-spacing: .02em; font-size: 1.1rem; }
+.brand svg { width: 1.6rem; height: 1.6rem; color: var(--accent); }
+.spacer { flex: 1; }
+.pill {
+  border: 1px solid var(--line); background: var(--surface); border-radius: 999px;
+  padding: .35rem .8rem; font-size: .85rem; display: inline-flex; align-items: center; gap: .4rem; min-height: 2.2rem;
+}
+.pill .dot { width: .55rem; height: .55rem; border-radius: 50%; background: var(--ok); }
+.pill.sim { border-color: var(--sim); background: var(--sim-bg); }
+.pill.sim .dot { background: var(--sim); }
+.net { font-size: .8rem; color: var(--bad); }
+
+main { padding: 1rem 1rem calc(var(--tabs-h) + 1.5rem + env(safe-area-inset-bottom)); max-width: 880px; margin: 0 auto; }
+.tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid; grid-template-columns: repeat(5, 1fr);
+  background: var(--surface); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom);
+}
+.tab {
+  border: 0; background: none; color: var(--muted); min-height: var(--tabs-h); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: .15rem; font-size: .72rem; position: relative;
+}
+.tab svg { width: 1.5rem; height: 1.5rem; }
+.tab[aria-current="page"] { color: var(--accent); }
+.tab .badge {
+  position: absolute; top: .55rem; left: calc(50% + .55rem); width: .6rem; height: .6rem; border-radius: 50%;
+  background: var(--info);
+}
+.tab .badge.ask { background: var(--accent); animation: pulse 1.2s infinite; }
+@keyframes pulse { 50% { transform: scale(1.5); opacity: .6; } }
+
+@media (min-width: 900px) {
+  .app { display: grid; grid-template-columns: 220px 1fr; grid-template-rows: auto 1fr; min-height: 100vh; }
+  .top { grid-column: 1 / 3; }
+  .tabs {
+    position: sticky; top: 3.4rem; align-self: start; grid-template-columns: 1fr; border: 0;
+    background: none; padding: 1rem .6rem; gap: .25rem;
+  }
+  .tab { flex-direction: row; justify-content: flex-start; gap: .7rem; padding: 0 1rem; min-height: 3rem; border-radius: 10px; font-size: .95rem; }
+  .tab[aria-current="page"] { background: var(--surface); }
+  .tab .badge { top: 50%; left: auto; right: .8rem; transform: translateY(-50%); }
+  main { padding-bottom: 2rem; margin: 0; width: 100%; }
+}
+/* маленькие экраны прибора (480×320, 800×480) */
+@media (max-height: 520px) {
+  :root { --tabs-h: 50px; }
+  .tab span { display: none; }
+  .top { padding-top: .3rem; padding-bottom: .3rem; }
+  main { padding-top: .6rem; }
+  h1 { font-size: 1.15rem; }
+  .card { padding: .7rem; margin-bottom: .6rem; }
+  .say { font-size: .85rem; margin-bottom: .5rem; }
+  .opt { min-height: 2.8rem; padding: .45rem .7rem; }
+}
+@media (max-height: 360px) {
+  .opt .txt small, .say { display: none !important; }
+  .ask { padding: .6rem; }
+}
+
+/* ---------- карточки и кнопки ---------- */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem; margin: 0 0 1rem; }
+.card > h2:first-child, .card > h3:first-child { margin-top: 0; }
+h1 { font-size: 1.45rem; margin: .2rem 0 .4rem; }
+h2 { font-size: 1.2rem; margin: .2rem 0 .5rem; }
+h3 { font-size: 1rem; margin: .8rem 0 .4rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+p { margin: .3rem 0 .7rem; }
+.muted { color: var(--muted); }
+.say { color: var(--muted); margin-bottom: 1rem; }
+
+.opts { display: grid; gap: .55rem; }
+@media (min-width: 640px) { .opts.two { grid-template-columns: 1fr 1fr; } }
+.opt {
+  display: flex; align-items: center; gap: .8rem; width: 100%; text-align: left; min-height: 3.4rem;
+  padding: .7rem .9rem; border-radius: 12px; border: 1px solid var(--line); background: var(--surface2);
+  border-left: 4px solid var(--line);
+}
+.opt:hover { border-color: var(--accent); }
+.opt:active { transform: scale(.99); }
+.opt .ico { font-size: 1.45rem; width: 1.9rem; text-align: center; flex: none; }
+.noemoji .opt .ico { display: none; }
+.opt .txt { flex: 1; min-width: 0; }
+.opt .txt b { display: block; font-weight: 600; }
+.opt .txt small { display: block; color: var(--muted); font-size: .85rem; margin-top: .1rem; }
+.opt .chev { color: var(--muted); font-size: 1.3rem; }
+.opt.important { border-left-color: var(--accent); }
+.opt.tip { border-left-color: var(--info); }
+.opt.info { border-left-color: var(--muted); }
+.tag { display: inline-block; font-size: .72rem; padding: .05rem .45rem; border-radius: 999px; margin-left: .35rem; vertical-align: middle; font-weight: 500; }
+.tag-ok { background: var(--ok-bg); color: var(--ok); }
+.tag-warn { background: var(--warn-bg); color: var(--warn); }
+.tag-info { background: var(--info-bg); color: var(--info); }
+.tag-sim { background: var(--sim-bg); color: var(--sim); }
+
+.btn {
+  border: 1px solid var(--line); background: var(--surface2); border-radius: 12px; min-height: 3rem;
+  padding: .55rem 1.1rem; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
+}
+a.btn { text-decoration: none; color: var(--text); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.danger { background: var(--bad); color: #fff; border-color: var(--bad); }
+.btn.ghost { background: none; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.small { min-height: 2.3rem; padding: .3rem .8rem; font-size: .9rem; }
+.row { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
+.row.end { justify-content: flex-end; }
+.back { border: 0; background: none; color: var(--muted); padding: .3rem 0; margin-bottom: .4rem; min-height: 2.4rem; font-size: .95rem; }
+
+/* ---------- работа ---------- */
+.progress { display: grid; gap: 4px; margin: .6rem 0 .3rem; }
+.progress i { height: 6px; border-radius: 3px; background: var(--line); }
+.progress i.done { background: var(--ok); }
+.progress i.now { background: var(--accent); }
+.log { font-size: .93rem; }
+.log .ev { padding: .25rem 0; display: flex; gap: .5rem; white-space: pre-wrap; word-break: break-word; }
+.log .ev .k { flex: none; width: 1.2rem; text-align: center; }
+.log .ev.ok .k { color: var(--ok); }
+.log .ev.warn { color: var(--warn); }
+.log .ev.error { color: var(--bad); }
+.log .ev.info, .log .ev.text { color: var(--muted); }
+.log .hdr { font-weight: 700; font-size: 1.05rem; margin: .4rem 0; }
+.log .step { margin: .9rem 0 .2rem; font-weight: 700; color: var(--accent); }
+.log .step small { color: var(--muted); font-weight: 500; margin-right: .4rem; }
+.st { font-size: .72rem; padding: .05rem .45rem; border-radius: 999px; flex: none; height: fit-content; margin-top: .15rem; }
+.st-ok { background: var(--ok-bg); color: var(--ok); }
+.st-info { background: var(--info-bg); color: var(--info); }
+.st-warn { background: var(--warn-bg); color: var(--warn); }
+.st-fail, .st-block { background: var(--bad-bg); color: var(--bad); }
+.log .chk { color: var(--muted); font-family: var(--mono); font-size: .8rem; }
+
+.ask {
+  position: sticky; bottom: calc(var(--tabs-h) + .6rem + env(safe-area-inset-bottom)); z-index: 10;
+  background: var(--surface); border: 2px solid var(--accent); border-radius: var(--radius); padding: 1rem;
+  box-shadow: 0 10px 30px rgba(0,0,0,.35); margin-top: 1rem;
+}
+@media (min-width: 900px) { .ask { bottom: 1rem; } }
+.ask .qtext { font-weight: 600; margin-bottom: .8rem; white-space: pre-wrap; }
+.ask .opts { margin-bottom: .6rem; }
+.ask.danger { border-color: var(--bad); }
+.ask input[type=text] {
+  width: 100%; font-size: 1.4rem; padding: .6rem .8rem; border-radius: 10px; border: 2px solid var(--line);
+  background: var(--bg); text-align: center; letter-spacing: .1em; margin: .3rem 0 .8rem;
+}
+.result { border-left: 5px solid var(--info); }
+.result.good { border-left-color: var(--ok); }
+.result.bad { border-left-color: var(--bad); }
+.result.warn { border-left-color: var(--warn); }
+.banner {
+  display: flex; align-items: center; gap: .6rem; background: var(--warn-bg); border: 1px solid var(--accent);
+  border-radius: 12px; padding: .6rem .8rem; margin-bottom: 1rem;
+}
+.banner .grow { flex: 1; }
+
+/* ---------- списки, уроки, формы ---------- */
+.list { display: grid; gap: .4rem; }
+.item {
+  display: block; width: 100%; text-align: left; background: var(--surface2); border: 1px solid var(--line);
+  border-radius: 10px; padding: .6rem .8rem; min-height: 2.9rem;
+}
+.item small { display: block; color: var(--muted); font-size: .82rem; }
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: .3rem .9rem; font-size: .93rem; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; word-break: break-word; }
+.mono { font-family: var(--mono); font-size: .85rem; }
+.events { font-family: var(--mono); font-size: .78rem; color: var(--muted); max-height: 50vh; overflow: auto; white-space: pre-wrap; }
+ol.steps { padding-left: 1.4rem; margin: .5rem 0; }
+ol.steps li { margin: 0 0 1rem; padding-left: .2rem; }
+.code { position: relative; margin: .5rem 0 0; }
+.code pre {
+  margin: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: .7rem .8rem;
+  overflow: auto; font-family: var(--mono); font-size: .82rem; line-height: 1.5;
+}
+.code .copy { position: absolute; top: .35rem; right: .35rem; }
+.check { background: var(--ok-bg); border-radius: 10px; padding: .7rem .9rem; margin: .4rem 0 1rem; }
+.why { font-size: 1.05rem; }
+label.f { display: block; margin: 0 0 .9rem; }
+label.f b { display: block; font-weight: 600; margin-bottom: .2rem; }
+label.f small { display: block; color: var(--muted); font-size: .82rem; margin-bottom: .3rem; }
+input.in, textarea.in, select.in {
+  width: 100%; padding: .65rem .75rem; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); min-height: 2.9rem;
+}
+textarea.in { min-height: 5rem; resize: vertical; }
+.check-row { display: flex; gap: .6rem; align-items: flex-start; margin: .6rem 0; }
+.check-row input { width: 1.4rem; height: 1.4rem; flex: none; margin-top: .1rem; }
+.msg { border-radius: 10px; padding: .45rem .7rem; margin: .3rem 0; font-size: .9rem; }
+.msg.e { background: var(--bad-bg); color: var(--bad); }
+.msg.w { background: var(--warn-bg); color: var(--warn); }
+.msg.h { background: var(--info-bg); color: var(--info); }
+.empty { text-align: center; padding: 2rem 1rem; color: var(--muted); }
+.big-pin { font-family: var(--mono); font-size: 2rem; letter-spacing: .25em; color: var(--accent); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface2); padding: .5rem .9rem; min-height: 2.8rem; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+
+/* ---------- окна ---------- */
+.modal { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.55); display: flex; align-items: flex-end; justify-content: center; }
+.modal .box {
+  background: var(--surface); width: 100%; max-width: 560px; max-height: 88vh; overflow: auto;
+  border-radius: 18px 18px 0 0; padding: 1.1rem 1rem calc(1rem + env(safe-area-inset-bottom)); border: 1px solid var(--line);
+}
+@media (min-width: 640px) { .modal { align-items: center; } .modal .box { border-radius: 18px; } }
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(var(--tabs-h) + 1rem + env(safe-area-inset-bottom));
+  z-index: 60; background: var(--text); color: var(--bg); padding: .6rem 1rem; border-radius: 12px; max-width: 92vw;
+  box-shadow: 0 6px 20px rgba(0,0,0,.3); font-size: .93rem;
+}
+.toast.bad { background: var(--bad); color: #fff; }
+.login { position: fixed; inset: 0; z-index: 70; background: var(--bg); display: flex; align-items: center; justify-content: center; padding: 1rem; }
+.login .card { max-width: 380px; width: 100%; text-align: center; }
+.login input { text-align: center; font-size: 1.8rem; letter-spacing: .3em; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <path d="M4 20 L17 7"/><circle cx="18.5" cy="5.5" r="2"/><path d="M3 9c2-2 4-2 6 0M3 13c3-3 6-3 9 0" opacity=".6"/>
+      </svg>
+      Дирижёр
+    </div>
+    <span id="net" class="net" hidden>нет связи…</span>
+    <div class="spacer"></div>
+    <button id="mode" class="pill" type="button" title="Переключить режим"><span class="dot"></span><span id="modeText">…</span></button>
+  </header>
+
+  <nav class="tabs" id="tabs" aria-label="Разделы">
+    <button class="tab" data-tab="guide" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2.2 5-5 2.2 2.2-5z"/></svg>
+      <span>Штурман</span></button>
+    <button class="tab" data-tab="work" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-6 5 12 2.5-6h4"/></svg>
+      <span>Работа</span><i class="badge" id="workBadge" hidden></i></button>
+    <button class="tab" data-tab="log" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg>
+      <span>Журнал</span></button>
+    <button class="tab" data-tab="dev" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5a4 4 0 0 0 4.9 5.2L12 18.1a2.1 2.1 0 1 1-3-3l7.4-7.4"/><path d="M4 4l4 4M3 8l2-2"/></svg>
+      <span>Развитие</span></button>
+    <button class="tab" data-tab="device" type="button">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg>
+      <span>Прибор</span></button>
+  </nav>
+
+  <main id="view" tabindex="-1" aria-live="polite"></main>
+</div>
+<div id="modal" class="modal" hidden></div>
+<div id="toast" class="toast" role="status" hidden></div>
+
+<script>
+"use strict";
+/* =====================================================================
+   Состояние и утилиты
+   ===================================================================== */
+const S = {
+  guide: null, hello: null, tab: "guide", node: null, stack: [], pages: [],
+  sim: null, job: null, jobId: null, seq: 0, events: [], polling: false,
+  builder: null, loginWait: null, renderId: 0,
+};
+const $ = (sel, root) => (root || document).querySelector(sel);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("drz." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem("drz." + k, JSON.stringify(v)); } catch (e) { /* хранилище недоступно — не страшно */ } },
+};
+
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k === "text") el.textContent = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const kid of kids.flat(3)) {
+    if (kid === null || kid === undefined || kid === false) continue;
+    el.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
+  }
+  return el;
+}
+
+function toast(text, kind) {
+  const t = $("#toast");
+  t.textContent = text; t.className = "toast" + (kind ? " " + kind : ""); t.hidden = false;
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => { t.hidden = true; }, kind === "bad" ? 6000 : 3500);
+}
+
+function fmtSize(n) {
+  if (n == null) return "—";
+  if (n >= 1048576 && n % 1048576 === 0) return (n / 1048576) + " МБ";
+  if (n >= 1024 && n % 1024 === 0) return (n / 1024) + " КБ";
+  return n.toLocaleString("ru-RU") + " байт";
+}
+
+async function copyText(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; }
+  } catch (e) { /* пробуем запасной способ */ }
+  const ta = h("textarea", { style: "position:fixed;top:0;left:0;opacity:0" });
+  ta.value = text; document.body.append(ta); ta.select();
+  let ok = false;
+  try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+  ta.remove();
+  return ok;
+}
+
+/* На экранах без цветных эмодзи (например, Raspberry Pi без шрифта Noto Color Emoji)
+   значки скрываются, чтобы не было «квадратиков». */
+function emojiSupported() {
+  try {
+    const c = document.createElement("canvas"); c.width = c.height = 24;
+    const x = c.getContext("2d"); x.textBaseline = "top"; x.font = "20px sans-serif"; x.fillText("🔧", 0, 0);
+    const d = x.getImageData(0, 0, 24, 24).data;
+    for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 0 && (d[i] !== d[i + 1] || d[i + 1] !== d[i + 2])) return true;
+    return false;
+  } catch (e) { return true; }
+}
+
+/* =====================================================================
+   Связь с прибором
+   ===================================================================== */
+async function api(path, opts) {
+  opts = opts || {};
+  const init = { method: opts.method || "GET", headers: { "X-Dirizher": "1" }, credentials: "same-origin" };
+  if (opts.json !== undefined) {
+    init.method = "POST"; init.headers["Content-Type"] = "application/json"; init.body = JSON.stringify(opts.json);
+  }
+  let r;
+  try { r = await fetch(path, init); setOnline(true); }
+  catch (e) { setOnline(false); const err = new Error("нет связи с прибором"); err.status = 0; throw err; }
+  if (r.status === 401 && !opts.noLogin) { await ensureLogin(); return api(path, opts); }
+  const isJson = (r.headers.get("content-type") || "").indexOf("json") >= 0;
+  const data = isJson ? await r.json() : null;
+  if (!r.ok) { const err = new Error((data && data.error) || ("ошибка " + r.status)); err.status = r.status; throw err; }
+  return data;
+}
+
+function setOnline(ok) { $("#net").hidden = ok; }
+
+function ensureLogin() {
+  if (S.loginWait) return S.loginWait;
+  S.loginWait = new Promise(resolve => {
+    const input = h("input", { class: "in", type: "password", inputmode: "numeric", autocomplete: "one-time-code",
+      maxlength: "12", placeholder: "••••••", "aria-label": "Код доступа" });
+    const err = h("div", { class: "msg e", hidden: true });
+    const btn = h("button", { class: "btn primary", type: "submit", style: "width:100%;margin-top:.8rem" }, "Войти");
+    const form = h("form", {}, input, err, btn);
+    const wrap = h("div", { class: "login" }, h("div", { class: "card" },
+      h("h1", {}, "Дирижёр"),
+      h("p", { class: "muted" }, "Введите код доступа. Он виден на экране самого прибора (раздел «Прибор») и в консоли, где запущен интерфейс."),
+      form));
+    form.addEventListener("submit", async ev => {
+      ev.preventDefault(); btn.disabled = true; err.hidden = true;
+      try {
+        await api("/api/login", { json: { pin: input.value }, noLogin: true });
+        wrap.remove(); S.loginWait = null; resolve();
+      } catch (e) { err.textContent = e.message; err.hidden = false; input.select(); }
+      btn.disabled = false;
+    });
+    document.body.append(wrap);
+    setTimeout(() => input.focus(), 50);
+  });
+  return S.loginWait;
+}
+
+/* =====================================================================
+   Режим, вкладки, страницы
+   ===================================================================== */
+function setSim(v, announce) {
+  S.sim = !!v; store.set("sim", S.sim);
+  const b = $("#mode");
+  b.classList.toggle("sim", S.sim);
+  $("#modeText").textContent = S.sim ? "Учебный режим" : "Железо";
+  if (announce) toast(S.sim ? "Учебный режим: виртуальная микросхема, железо не используется" : "Работа с настоящим железом");
+}
+
+function showTab(tab) {
+  S.tab = tab; S.pages = [];
+  for (const b of document.querySelectorAll(".tab")) b.setAttribute("aria-current", b.dataset.tab === tab ? "page" : "false");
+  render();
+  window.scrollTo(0, 0);
+}
+
+function openPage(fn) { S.pages.push(fn); render(); window.scrollTo(0, 0); }
+function back() { S.pages.pop(); render(); }
+function backBtn(label) { return h("button", { class: "back", type: "button", onclick: back }, "← " + (label || "Назад")); }
+
+function render() {
+  const v = $("#view");
+  v.textContent = "";
+  S.renderId++;
+  try {
+    if (S.pages.length) return S.pages[S.pages.length - 1](v);
+    ({ guide: renderGuide, work: renderWork, log: renderLog, dev: renderDev, device: renderDevice })[S.tab](v);
+  } catch (e) { v.append(h("div", { class: "card" }, "Ошибка показа: " + e.message)); }
+}
+
+function questionBanner() {
+  if (!S.job || S.job.done || !S.job.question || S.tab === "work") return null;
+  return h("div", { class: "banner" }, h("span", { class: "grow" }, "Дирижёр ждёт вашего ответа"),
+    h("button", { class: "btn primary small", type: "button", onclick: () => showTab("work") }, "Открыть"));
+}
+
+/* =====================================================================
+   Варианты ответов (общий вид для Штурмана, подсказок, «что дальше»)
+   ===================================================================== */
+function optTag(o) {
+  const p = o.params || {};
+  if (o.lesson) return ["урок", "tag-info"];
+  if (o.action === "run") return p.dry_run ? ["без записи", "tag-ok"] : ["запись после «ДА»", "tag-warn"];
+  if (o.action === "rollback") return ["запись после «ДА»", "tag-warn"];
+  if (o.action === "detect") return ["только чтение", "tag-ok"];
+  if (o.action === "sim") return ["учебный", "tag-sim"];
+  return null;
+}
+
+function optButton(o) {
+  const tag = optTag(o);
+  return h("button", { class: "opt " + (o.level || ""), type: "button", onclick: () => go(o) },
+    o.icon ? h("span", { class: "ico", "aria-hidden": "true" }, o.icon) : null,
+    h("span", { class: "txt" },
+      h("b", {}, o.label, tag ? h("span", { class: "tag " + tag[1] }, tag[0]) : null),
+      o.explain ? h("small", {}, o.explain) : null),
+    h("span", { class: "chev", "aria-hidden": "true" }, "›"));
+}
+
+async function go(o) {
+  if (o.next) {
+    const node = S.guide.nodes[o.next];
+    if (o.next === S.guide.start) S.stack = [];
+    else if (S.tab === "guide") { if (o.next !== S.node) S.stack.push(S.node); }
+    else S.stack = [S.guide.start];
+    S.node = o.next;
+    if (node.mode === "sim" && !S.sim) setSim(true, true);
+    return showTab("guide");
+  }
+  if (o.lesson) return openPage(v => renderLesson(v, o.lesson));
+  if (o.action) return doAction(o.action, o.params || {});
+}
+
+const VIEW_ACTIONS = {
+  history: () => showTab("log"),
+  plugins: () => showTab("device"),
+  profiles: () => showTab("device"),
+  roadmap: () => showTab("dev"),
+  builder: p => openPage(v => renderBuilder(v, p.draft)),
+  show: p => openPage(v => renderSession(v, p.session)),
+};
+const PICK = { rollback: "rollback", feedback: "feedback", reference: "reference", export: "export" };
+
+async function doAction(action, params) {
+  params = Object.assign({}, params);
+  if (VIEW_ACTIONS[action]) return VIEW_ACTIONS[action](params);
+  if (S.job && !S.job.done) { toast("Уже идёт задание — сначала завершите его", "bad"); return showTab("work"); }
+  if (PICK[action] && params.session == null) {
+    const sid = await pickSession(PICK[action]);
+    if (sid == null) return;
+    params.session = sid;
+  }
+  if (action === "export") return openPage(v => renderSession(v, params.session));
+  if (params.label === "ask") {
+    const v = await promptText("Метка эталона", "Модель и ревизия платы — помогает различать эталоны. Можно оставить пустым.", "роутер-X1-rev2");
+    if (v === null) return;
+    params.label = v || null;
+  }
+  if (params.image === "ask") {
+    const name = await pickImage();
+    if (!name) return;
+    params.image = name;
+  }
+  if (action === "sim" && !S.sim) setSim(true, true);
+  try {
+    const r = await api("/api/job", { json: { action, params, sim: S.sim } });
+    S.jobId = null; S.seq = 0;
+    applyJob(r.job);
+    showTab("work");
+    poll();
+  } catch (e) {
+    toast(e.message, "bad");
+    if (e.status === 409) showTab("work");
+  }
+}
+
+/* =====================================================================
+   Окна: выбор сеанса, текст, файл образа
+   ===================================================================== */
+function modal(title, body, onClose) {
+  const m = $("#modal");
+  m.textContent = "";
+  const close = () => { m.hidden = true; m.textContent = ""; if (onClose) onClose(); };
+  const box = h("div", { class: "box", role: "dialog", "aria-modal": "true", "aria-label": title }, h("h2", {}, title), body);
+  m.append(box); m.hidden = false;
+  m.onclick = ev => { if (ev.target === m) close(); };
+  return { close, box };
+}
+
+function pickSession(purpose) {
+  const titles = { rollback: "Какой сеанс откатить?", feedback: "Отзыв по какому сеансу?",
+    reference: "Из какого сеанса взять эталон?", export: "Дамп из какого сеанса?" };
+  return new Promise(async resolve => {
+    let done = false;
+    const finish = v => { if (!done) { done = true; resolve(v); } };
+    const list = h("div", { class: "list" }, h("p", { class: "muted" }, "Загружаю журнал…"));
+    const m = modal(titles[purpose] || "Выберите сеанс", [list,
+      h("div", { class: "row end", style: "margin-top:1rem" },
+        h("button", { class: "btn ghost", type: "button", onclick: () => m.close() }, "Отмена"))], () => finish(null));
+    try {
+      const r = await api("/api/pick?purpose=" + purpose + "&sim=" + (S.sim ? 1 : 0));
+      list.textContent = "";
+      if (!r.items.length) list.append(h("p", { class: "muted" }, "Подходящих сеансов нет" + (S.sim ? " (учебный режим)." : ".")));
+      for (const it of r.items) list.append(h("button", { class: "item", type: "button",
+        onclick: () => { finish(it.id); m.close(); } }, it.text));
+    } catch (e) { list.textContent = e.message; }
+  });
+}
+
+function promptText(title, hint, placeholder) {
+  return new Promise(resolve => {
+    let done = false;
+    const finish = v => { if (!done) { done = true; resolve(v); } };
+    const input = h("input", { class: "in", type: "text", placeholder: placeholder || "", maxlength: "80" });
+    const form = h("form", {}, h("p", { class: "muted" }, hint), input,
+      h("div", { class: "row end", style: "margin-top:1rem" },
+        h("button", { class: "btn ghost", type: "button", onclick: () => m.close() }, "Отмена"),
+        h("button", { class: "btn primary", type: "submit" }, "Дальше")));
+    form.addEventListener("submit", ev => { ev.preventDefault(); finish(input.value.trim()); m.close(); });
+    const m = modal(title, form, () => finish(null));
+    setTimeout(() => input.focus(), 50);
+  });
+}
+
+function uploadFile(file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const x = new XMLHttpRequest();
+    x.open("POST", "/api/upload?name=" + encodeURIComponent(file.name));
+    x.setRequestHeader("X-Dirizher", "1");
+    x.upload.onprogress = e => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
+    x.onload = () => {
+      let data = null;
+      try { data = JSON.parse(x.responseText); } catch (e) { data = null; }
+      if (x.status === 200) resolve(data);
+      else reject(new Error((data && data.error) || ("ошибка " + x.status)));
+    };
+    x.onerror = () => reject(new Error("нет связи с прибором"));
+    x.send(file);
+  });
+}
+
+function pickImage() {
+  return new Promise(async resolve => {
+    let done = false;
+    const finish = v => { if (!done) { done = true; resolve(v); } };
+    const list = h("div", { class: "list" });
+    const status = h("p", { class: "muted" });
+    const file = h("input", { type: "file", hidden: true });
+    const m = modal("Файл полного образа", [
+      h("p", { class: "muted" }, "Нужен образ ВСЕЙ микросхемы — размер файла должен быть равен размеру чипа. Файл обновления с сайта производителя обычно не подходит."),
+      h("div", { class: "row" },
+        h("button", { class: "btn primary", type: "button", onclick: () => file.click() }, "Загрузить файл с этого устройства"), file),
+      status, h("h3", {}, "Уже на приборе"), list,
+      h("div", { class: "row end", style: "margin-top:1rem" },
+        h("button", { class: "btn ghost", type: "button", onclick: () => m.close() }, "Отмена"))], () => finish(null));
+    file.addEventListener("change", async () => {
+      const f = file.files[0];
+      if (!f) return;
+      status.textContent = "Загружаю " + f.name + "…";
+      try {
+        const r = await uploadFile(f, p => { status.textContent = "Загружаю " + f.name + ": " + Math.round(p * 100) + "%"; });
+        toast("Файл на приборе: " + r.name + " (" + fmtSize(r.size) + ")");
+        finish(r.name); m.close();
+      } catch (e) { status.textContent = e.message; }
+    });
+    try {
+      const r = await api("/api/images");
+      if (!r.items.length) list.append(h("p", { class: "muted" }, "Пока ни одного файла."));
+      for (const it of r.items) list.append(h("button", { class: "item", type: "button",
+        onclick: () => { finish(it.name); m.close(); } }, it.name, h("small", {}, fmtSize(it.size) + " · " + it.mtime)));
+    } catch (e) { list.textContent = e.message; }
+  });
+}
+
+/* =====================================================================
+   Штурман
+   ===================================================================== */
+function renderGuide(v) {
+  const g = S.guide;
+  const node = g.nodes[S.node] || g.nodes[g.start];
+  const banner = questionBanner();
+  if (banner) v.append(banner);
+  if (S.node === g.start) {
+    const sug = h("section", { class: "card", hidden: true }, h("h3", {}, "Сейчас важно"));
+    const list = h("div", { class: "opts" });
+    sug.append(list);
+    v.append(sug);
+    api("/api/suggest?sim=" + (S.sim ? 1 : 0)).then(r => {
+      if (!r.items.length) return;
+      for (const o of r.items) list.append(optButton(o));
+      sug.hidden = false;
+    }).catch(() => {});
+  }
+  const card = h("section", { class: "card" });
+  if (S.stack.length) card.append(h("button", { class: "back", type: "button", onclick: () => {
+    S.node = S.stack.pop() || g.start; render(); } }, "← Назад"));
+  card.append(h(S.node === g.start ? "h1" : "h2", {}, node.ask));
+  if (node.say) card.append(h("p", { class: "say" }, node.say));
+  const opts = h("div", { class: "opts" + (node.options.length > 6 ? " two" : "") });
+  for (const o of node.options) opts.append(optButton(o));
+  card.append(opts);
+  v.append(card);
+}
+
+/* =====================================================================
+   Работа: ход задания, вопросы, итог
+   ===================================================================== */
+const FIND = { ok: "норма", info: "сведения", warn: "замечание", fail: "неисправность", block: "опасно" };
+const MARKS = { ok: "✔", warn: "⚠", error: "✖", info: "·", text: "" };
+
+function eventNode(e) {
+  if (e.kind === "header") return h("div", { class: "hdr" }, e.text);
+  if (e.kind === "step") return h("div", { class: "step" }, h("small", {}, "Шаг " + e.n + " из " + e.total), e.text);
+  if (e.kind === "finding") return h("div", { class: "ev" },
+    h("span", { class: "st st-" + e.status }, FIND[e.status] || e.status),
+    h("span", {}, e.text, " ", h("span", { class: "chk" }, e.check)));
+  let mark = MARKS[e.kind] || "", text = e.text;
+  if (text.startsWith("• ")) { mark = "•"; text = text.slice(2); }
+  return h("div", { class: "ev " + e.kind }, h("span", { class: "k" }, mark), h("span", {}, text));
+}
+
+function lastStep() {
+  for (let i = S.events.length - 1; i >= 0; i--) if (S.events[i].kind === "step") return S.events[i];
+  return null;
+}
+
+function progressNode() {
+  const st = lastStep();
+  const bar = h("div", { class: "progress", id: "progress" });
+  if (!st) return bar;
+  bar.style.gridTemplateColumns = "repeat(" + st.total + ", 1fr)";
+  const finished = S.job && S.job.done;
+  for (let i = 1; i <= st.total; i++) bar.append(h("i", { class: i < st.n || (finished && i === st.n) ? "done" : (i === st.n ? "now" : "") }));
+  return bar;
+}
+
+function renderWork(v) {
+  const j = S.job;
+  if (!j) {
+    v.append(h("div", { class: "card empty" }, h("p", {}, "Сейчас ничего не выполняется."),
+      h("button", { class: "btn primary", type: "button", onclick: () => showTab("guide") }, "Что будем делать?")));
+    return;
+  }
+  const chips = h("div", { class: "row" },
+    h("span", { class: "tag " + (j.sim ? "tag-sim" : "tag-ok") }, j.sim ? "учебный режим" : "железо"),
+    j.dry_run ? h("span", { class: "tag tag-ok" }, "без записи") : null,
+    h("span", { class: "tag tag-info", id: "jobState" }, j.done ? "завершено" : "идёт"));
+  v.append(h("section", { class: "card" }, h("h2", {}, j.title), chips, progressNode(),
+    h("div", { class: "log", id: "log" }, S.events.map(eventNode))));
+  v.append(h("div", { id: "q" }));
+  v.append(h("div", { id: "res" }));
+  renderQuestion();
+  renderResult();
+}
+
+function updateWork(newEvents) {
+  const log = $("#log");
+  if (!log) return render();
+  const nearBottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 160;
+  for (const e of newEvents) log.append(eventNode(e));
+  const old = $("#progress");
+  if (old) old.replaceWith(progressNode());
+  const st = $("#jobState");
+  if (st) st.textContent = S.job.done ? "завершено" : "идёт";
+  renderQuestion();
+  renderResult();
+  if (nearBottom && newEvents.length) window.scrollTo(0, document.body.scrollHeight);
+}
+
+function renderQuestion() {
+  const box = $("#q");
+  if (!box) return;
+  const q = S.job && !S.job.done ? S.job.question : null;
+  if (box.dataset.qid === String(q ? q.qid : "")) return;   // уже показан
+  box.dataset.qid = q ? q.qid : "";
+  box.textContent = "";
+  box.className = "";
+  if (!q) return;
+  const send = async (value, buttons) => {
+    buttons.forEach(b => { b.disabled = true; });
+    try { await api("/api/answer", { json: { job: S.job.id, qid: q.qid, value } }); box.textContent = ""; }
+    catch (e) { toast(e.message, "bad"); buttons.forEach(b => { b.disabled = false; }); }
+  };
+  const cancel = async () => {
+    try { await api("/api/cancel", { json: {} }); box.textContent = ""; } catch (e) { toast(e.message, "bad"); }
+  };
+  box.className = "ask" + (q.type === "confirm_word" ? " danger" : "");
+  box.append(h("div", { class: "qtext" }, q.text));
+  const buttons = [];
+  const mk = (label, cls, fn) => { const b = h("button", { class: "btn " + cls, type: "button", onclick: () => fn(b) }, label); buttons.push(b); return b; };
+
+  if (q.type === "pause") {
+    box.append(h("div", { class: "row" }, mk("Продолжить", "primary", () => send(true, buttons)),
+      mk("Отмена", "ghost", () => cancel())));
+  } else if (q.type === "yes_no") {
+    box.append(h("div", { class: "row" }, q.options.map(o =>
+      mk(o.label, o.value === "yes" ? "primary" : "", () => send(o.value, buttons)))));
+  } else if (q.type === "choose") {
+    const list = h("div", { class: "opts" });
+    q.options.forEach((label, i) => {
+      const b = h("button", { class: "opt", type: "button", onclick: () => send(i, buttons) },
+        h("span", { class: "txt" }, h("b", {}, label)), h("span", { class: "chev" }, "›"));
+      buttons.push(b); list.append(b);
+    });
+    box.append(list, h("div", { class: "row" }, mk("Отмена", "ghost", () => cancel())));
+  } else if (q.type === "confirm_word") {
+    const word = q.word || "ДА";
+    const input = h("input", { type: "text", autocomplete: "off", autocapitalize: "characters", spellcheck: "false",
+      "aria-label": "Слово подтверждения", placeholder: word });
+    const writeBtn = mk("Записать", "danger", () => send(input.value, buttons));
+    writeBtn.disabled = true;
+    input.addEventListener("input", () => {
+      const v = input.value.trim().toLowerCase();
+      writeBtn.disabled = !(v === word.toLowerCase() || v === "yes");
+    });
+    input.addEventListener("keydown", ev => { if (ev.key === "Enter" && !writeBtn.disabled) writeBtn.click(); });
+    box.append(h("p", { class: "muted" }, "Копия «до» уже сохранена. Чтобы записать, введите слово «" + word + "» — кнопкой его не заменить."),
+      input, h("div", { class: "row" }, writeBtn, mk("Отмена — не записывать", "ghost", () => cancel())));
+    setTimeout(() => input.focus(), 50);
+  }
+}
+
+function renderResult() {
+  const box = $("#res");
+  if (!box) return;
+  box.textContent = "";
+  const j = S.job;
+  if (!j || !j.done || !j.result) return;
+  const o = j.result.outcome || "";
+  const good = ["healthy", "repaired", "rolled_back", "detected", "already_same"].indexOf(o) >= 0;
+  const bad = ["write_failed", "not_repaired", "rollback_failed", "read_failed", "blocked", "blocked_voltage"].indexOf(o) >= 0 || j.result.error;
+  const card = h("section", { class: "card result " + (good ? "good" : bad ? "bad" : "warn") },
+    h("h2", {}, j.result.outcome_text || "Готово"),
+    j.result.session ? h("p", { class: "muted" }, "Сеанс №" + j.result.session) : null);
+  if (j.next && j.next.length) {
+    card.append(h("h3", {}, "Что дальше?"));
+    card.append(h("div", { class: "opts" }, j.next.map(optButton)));
+  }
+  card.append(h("div", { class: "row", style: "margin-top:.8rem" },
+    j.result.session ? h("button", { class: "btn small", type: "button", onclick: () => openPage(v => renderSession(v, j.result.session)) }, "Журнал сеанса") : null,
+    (j.next || []).some(o => o.next === S.guide.start) ? null :
+      h("button", { class: "btn small ghost", type: "button", onclick: () => { S.node = S.guide.start; S.stack = []; showTab("guide"); } }, "К началу")));
+  box.append(card);
+}
+
+function applyJob(job) {
+  if (!job) { S.job = null; updateBadge(); return; }
+  const fresh = job.id !== S.jobId;
+  if (fresh) { S.jobId = job.id; S.events = []; }
+  S.job = job;
+  S.events.push(...job.events);
+  if (S.events.length > 4000) S.events.splice(0, S.events.length - 4000);
+  S.seq = job.seq;
+  updateBadge();
+  if (S.tab === "work" && !S.pages.length) {
+    if (fresh) render(); else updateWork(job.events);
+  } else if (S.tab === "guide" && !S.pages.length && job.question && !$(".banner")) {
+    render();
+  }
+}
+
+function updateBadge() {
+  const b = $("#workBadge");
+  const j = S.job;
+  b.hidden = !(j && !j.done);
+  b.classList.toggle("ask", !!(j && !j.done && j.question));
+  document.title = (j && !j.done && j.question ? "● " : "") + "Дирижёр";
+}
+
+async function poll() {
+  if (S.polling) return;
+  S.polling = true;
+  try {
+    for (;;) {
+      let r;
+      try { r = await api("/api/job?wait=1&since=" + S.seq + "&job=" + (S.jobId || "")); }
+      catch (e) { await sleep(2500); continue; }
+      applyJob(r.job);
+      if (!r.job || r.job.done) break;
+    }
+  } finally { S.polling = false; }
+}
+
+/* =====================================================================
+   Журнал
+   ===================================================================== */
+async function renderLog(v) {
+  const banner = questionBanner();
+  if (banner) v.append(banner);
+  const card = h("section", { class: "card" }, h("h2", {}, "Журнал сеансов" + (S.sim ? " — учебный режим" : "")),
+    h("p", { class: "muted" }, "Каждый сеанс записан: что подключали, проверки, команды инструментов, копии и итог."));
+  const list = h("div", { class: "list" }, h("p", { class: "muted" }, "Загружаю…"));
+  card.append(list); v.append(card);
+  try {
+    const r = await api("/api/history?n=100&sim=" + (S.sim ? 1 : 0));
+    list.textContent = "";
+    if (!r.items.length) list.append(h("p", { class: "muted" }, "Пока пусто."));
+    for (const it of r.items) list.append(h("button", { class: "item", type: "button",
+      onclick: () => openPage(w => renderSession(w, it.id)) },
+      "№" + it.id + " · " + it.kind_ru + " · " + it.outcome_text,
+      h("small", {}, it.started + (it.profile ? " · " + it.profile : "") + (it.recipe ? " · " + it.recipe : ""))));
+  } catch (e) { list.textContent = e.message; }
+}
+
+/* Асинхронные страницы проверяют, что их ещё не сменили другой страницей. */
+function liveCheck() { const id = S.renderId; return () => id === S.renderId; }
+
+async function renderSession(v, sid) {
+  const alive = liveCheck();
+  v.append(backBtn());
+  const card = h("section", { class: "card" }, h("h2", {}, "Сеанс №" + sid), h("p", { class: "muted" }, "Загружаю…"));
+  v.append(card);
+  let d;
+  try { d = await api("/api/session?id=" + sid + "&sim=" + (S.sim ? 1 : 0)); }
+  catch (e) { card.lastChild.textContent = e.message + (S.sim ? "" : " Возможно, это учебный сеанс — переключите режим."); return; }
+  if (!alive()) return;
+  const s = d.session;
+  card.textContent = "";
+  card.append(h("h2", {}, "Сеанс №" + sid + " — " + s.kind_ru), h("p", {}, s.outcome_text),
+    h("dl", { class: "kv" },
+      h("dt", {}, "начат"), h("dd", {}, (s.started || "").replace("T", " ")),
+      s.profile_id ? [h("dt", {}, "профиль"), h("dd", {}, s.profile_id)] : null,
+      s.recipe_id ? [h("dt", {}, "способ"), h("dd", {}, s.recipe_id)] : null,
+      s.plugin ? [h("dt", {}, "инструмент"), h("dd", {}, s.plugin)] : null,
+      s.parent_session ? [h("dt", {}, "откат сеанса"), h("dd", {}, "№" + s.parent_session)] : null));
+  if (d.snapshots.length) {
+    const snaps = h("section", { class: "card" }, h("h3", {}, "Снимки (копии)"));
+    for (const sn of d.snapshots) snaps.append(h("div", { class: "row", style: "justify-content:space-between;margin:.4rem 0" },
+      h("div", {}, h("b", {}, sn.kind_ru), h("div", { class: "muted mono" }, sn.sha.slice(0, 16) + "… · " + fmtSize(sn.size) + " · " + (sn.verified ? "подтверждён" : "НЕ подтверждён"))),
+      h("a", { class: "btn small", href: "/api/download?sid=" + sid + "&kind=" + sn.kind + "&sim=" + (S.sim ? 1 : 0), download: "" }, "Скачать")));
+    v.append(snaps);
+  }
+  if (d.actions.length) v.append(h("section", { class: "card" }, h("h3", {}, "Действия"), h("div", { class: "opts" }, d.actions.map(optButton))));
+  v.append(h("section", { class: "card" }, h("h3", {}, "Журнал событий"),
+    h("div", { class: "events" }, d.events.map(e => e.ts + " [" + e.level + "] " + e.message).join("\n"))));
+}
+
+/* =====================================================================
+   Развитие: план, конструктор, уроки
+   ===================================================================== */
+function lessonList(group) {
+  const list = h("div", { class: "opts" });
+  for (const [id, l] of Object.entries(S.guide.lessons)) {
+    if ((l.group || "work") !== group) continue;
+    list.append(optButton({ label: l.title, explain: l.why, lesson: id }));
+  }
+  return list;
+}
+
+async function renderDev(v) {
+  const road = h("ol", { class: "steps" }, h("li", { class: "muted" }, "Загружаю…"));
+  v.append(h("section", { class: "card" }, h("h2", {}, "Что делать дальше по плану"),
+    h("p", { class: "muted" }, "Шаги из docs/STATUS.md — их обновляют в конце каждой сессии разработки."), road,
+    h("div", { class: "row" }, h("button", { class: "btn small", type: "button", onclick: () => go({ lesson: "dev_session" }) }, "Как вести сессию разработки"))));
+  v.append(h("section", { class: "card" }, h("h2", {}, "Конструктор профиля чипа"),
+    h("p", { class: "muted" }, "Заполните паспорт чипа по даташиту — конструктор проверит поля, покажет YAML и подскажет. Включить профиль можно только после вашей проверки."),
+    h("button", { class: "btn primary", type: "button", onclick: () => openPage(w => renderBuilder(w)) }, "Открыть конструктор")));
+  v.append(h("section", { class: "card" }, h("h2", {}, "Уроки: развитие"), lessonList("dev")));
+  v.append(h("section", { class: "card" }, h("h2", {}, "Уроки: работа"), lessonList("work")));
+  try {
+    const r = await api("/api/roadmap");
+    road.textContent = "";
+    if (!r.items.length) road.append(h("li", { class: "muted" }, "docs/STATUS.md не найден рядом с config.yaml."));
+    for (const it of r.items) road.append(h("li", {}, it));
+  } catch (e) { road.textContent = e.message; }
+}
+
+function renderLesson(v, id) {
+  const l = S.guide.lessons[id];
+  v.append(backBtn());
+  if (!l) { v.append(h("div", { class: "card" }, "Урок не найден: " + id)); return; }
+  const card = h("article", { class: "card" }, h("h1", {}, l.title), l.why ? h("p", { class: "why" }, l.why) : null);
+  const ol = h("ol", { class: "steps" });
+  for (const st of l.steps) {
+    const li = h("li", {}, h("div", {}, st.text));
+    if (st.code) {
+      const code = st.code.replace(/\s+$/, "");
+      const btn = h("button", { class: "btn small copy", type: "button" }, "Копировать");
+      btn.addEventListener("click", async () => { toast(await copyText(code) ? "Скопировано" : "Не удалось скопировать — выделите текст вручную"); });
+      li.append(h("div", { class: "code" }, h("pre", {}, code), btn));
+    }
+    ol.append(li);
+  }
+  card.append(ol);
+  if (l.check) card.append(h("div", { class: "check" }, h("b", {}, "✔ Как проверить. "), l.check));
+  v.append(card);
+  if (l.related && l.related.length) v.append(h("section", { class: "card" }, h("h3", {}, "Дальше"), h("div", { class: "opts" }, l.related.map(optButton))));
+}
+
+async function renderBuilder(v, draft) {
+  const alive = liveCheck();
+  v.append(backBtn());
+  if (!S.builder) S.builder = { fields: {}, spec: null, drafts: [], confirmed: false };
+  const B = S.builder;
+  const card = h("section", { class: "card" }, h("h1", {}, "Конструктор профиля чипа"),
+    h("p", { class: "muted" }, "Паспорт чипа для Дирижёра. Всё сверяйте с даташитом — особенно напряжение."));
+  v.append(card);
+  try {
+    if (!B.spec) B.spec = (await api("/api/builder/fields")).fields;
+    B.drafts = (await api("/api/builder/drafts")).items;
+  } catch (e) { card.append(h("div", { class: "msg e" }, e.message)); return; }
+  if (!alive()) return;
+  if (draft) {
+    const d = B.drafts.find(x => x.file === draft);
+    if (d) B.fields = Object.assign({}, d.fields);
+  }
+  if (B.drafts.length) {
+    const sel = h("select", { class: "in" }, h("option", { value: "" }, "— заполнить из черновика —"),
+      B.drafts.map(d => h("option", { value: d.file }, d.file + (d.fields.jedec_id ? " · " + d.fields.jedec_id : ""))));
+    sel.addEventListener("change", () => {
+      const d = B.drafts.find(x => x.file === sel.value);
+      if (d) { B.fields = Object.assign({}, d.fields); render(); }
+    });
+    card.append(h("label", { class: "f" }, h("b", {}, "Черновики"), h("small", {}, "Дирижёр создаёт их сам, когда встречает незнакомый чип."), sel));
+  }
+  const form = h("div", {});
+  for (const f of B.spec) {
+    let input;
+    if (f.type === "bool") {
+      if (B.fields[f.name] === undefined) B.fields[f.name] = f.default !== false;
+      input = h("input", { type: "checkbox" });
+      input.checked = !!B.fields[f.name];
+      input.addEventListener("change", () => { B.fields[f.name] = input.checked; preview(); });
+      form.append(h("div", { class: "check-row" }, input, h("div", {}, h("b", {}, f.label), h("small", { class: "muted", style: "display:block" }, f.help))));
+      continue;
+    }
+    input = h(f.type === "text" ? "textarea" : "input", { class: "in", placeholder: f.example ? "например: " + f.example : "",
+      autocapitalize: "off", spellcheck: "false", inputmode: f.name === "voltage" ? "decimal" : null });
+    input.value = B.fields[f.name] == null ? "" : B.fields[f.name];
+    input.addEventListener("input", () => { B.fields[f.name] = input.value; preview(); });
+    form.append(h("label", { class: "f" }, h("b", {}, f.label + (f.required ? " *" : "")), h("small", {}, f.help), input));
+  }
+  card.append(form);
+  const msgs = h("div", {});
+  const yaml = h("pre", {});
+  const res = h("section", { class: "card" }, h("h3", {}, "Проверка и подсказки"), msgs, h("h3", {}, "Готовый профиль (YAML)"), h("div", { class: "code" }, yaml));
+  const confirm = h("input", { type: "checkbox" });
+  confirm.checked = B.confirmed;
+  confirm.addEventListener("change", () => { B.confirmed = confirm.checked; enableBtn.disabled = !B.confirmed || B.hasErrors; });
+  const saveBtn = h("button", { class: "btn", type: "button" }, "Сохранить черновик");
+  const enableBtn = h("button", { class: "btn primary", type: "button" }, "Включить профиль");
+  saveBtn.disabled = enableBtn.disabled = true;     // до первой проверки
+  saveBtn.addEventListener("click", async () => {
+    try { const r = await api("/api/builder/save", { json: { fields: B.fields } }); toast("Черновик сохранён: " + r.file); }
+    catch (e) { toast(e.message, "bad"); }
+  });
+  enableBtn.addEventListener("click", async () => {
+    try {
+      const r = await api("/api/builder/enable", { json: { fields: B.fields, confirmed: B.confirmed } });
+      toast("Профиль включён: profiles/chips/" + r.file);
+      S.builder = null; back();
+    } catch (e) { toast(e.message, "bad"); }
+  });
+  v.append(res, h("section", { class: "card" },
+    h("div", { class: "check-row" }, confirm, h("div", {}, h("b", {}, "Я сверил напряжение и JEDEC ID с даташитом"),
+      h("small", { class: "muted", style: "display:block" }, "Без этого профиль не включится. Черновик можно сохранить в любой момент."))),
+    h("div", { class: "row" }, saveBtn, enableBtn)));
+  let timer = null;
+  async function preview() {
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      try {
+        const r = await api("/api/builder/preview", { json: { fields: B.fields } });
+        msgs.textContent = "";
+        r.errors.forEach(t => msgs.append(h("div", { class: "msg e" }, t)));
+        r.warnings.forEach(t => msgs.append(h("div", { class: "msg w" }, t)));
+        r.hints.forEach(t => msgs.append(h("div", { class: "msg h" }, t)));
+        if (!r.errors.length && !r.warnings.length) msgs.append(h("div", { class: "msg h" }, "Ошибок нет."));
+        yaml.textContent = r.yaml;
+        B.hasErrors = r.errors.length > 0;
+        saveBtn.disabled = B.hasErrors;
+        enableBtn.disabled = B.hasErrors || !B.confirmed;
+      } catch (e) { msgs.textContent = e.message; }
+    }, 300);
+  }
+  preview();
+}
+
+/* =====================================================================
+   Прибор: режим, подключение, инструменты, экран
+   ===================================================================== */
+async function renderDevice(v) {
+  const theme = store.get("theme", "auto");
+  const seg = (items, cur, fn) => h("div", { class: "seg" }, items.map(([val, label]) =>
+    h("button", { type: "button", "aria-pressed": String(val === cur), onclick: () => fn(val) }, label)));
+  v.append(h("section", { class: "card" }, h("h2", {}, "Режим"),
+    h("p", { class: "muted" }, "Учебный — виртуальная микросхема, железо не используется, учебные копии хранятся отдельно. Железо — настоящий программатор."),
+    seg([[false, "Железо"], [true, "Учебный"]], S.sim, val => { setSim(val, true); render(); })));
+  const conn = h("section", { class: "card" }, h("h2", {}, "Подключить телефон или ПК"), h("p", { class: "muted" }, "Загружаю…"));
+  v.append(conn);
+  const tools = h("section", { class: "card" }, h("h2", {}, "Инструменты и профили"));
+  v.append(tools);
+  v.append(h("section", { class: "card" }, h("h2", {}, "Экран"),
+    h("p", { class: "muted" }, "Размер текста — для маленьких экранов прибора и для работы издалека."),
+    h("div", { class: "row" },
+      h("button", { class: "btn", type: "button", onclick: () => setScale(store.get("scale", 1) - 0.1) }, "A−"),
+      h("button", { class: "btn", type: "button", onclick: () => setScale(1) }, "Обычный"),
+      h("button", { class: "btn", type: "button", onclick: () => setScale(store.get("scale", 1) + 0.1) }, "A+")),
+    h("h3", {}, "Оформление"),
+    seg([["auto", "Как в системе"], ["dark", "Тёмное"], ["light", "Светлое"]], theme, val => { store.set("theme", val); applyPrefs(); render(); })));
+  let d;
+  try { d = await api("/api/device?sim=" + (S.sim ? 1 : 0)); } catch (e) { conn.lastChild.textContent = e.message; return; }
+  conn.textContent = "";
+  conn.append(h("h2", {}, "Подключить телефон или ПК"),
+    h("p", { class: "muted" }, "Телефон и прибор — в одной сети Wi-Fi. Откройте на телефоне один из адресов:"),
+    h("div", { class: "list" }, d.connect.urls.map(u => h("div", { class: "item mono" }, u))));
+  if (d.connect.pin) conn.append(h("p", {}, "Код доступа: ", h("span", { class: "big-pin" }, d.connect.pin)));
+  else conn.append(h("p", { class: "muted" }, "Код доступа показывается только на экране самого прибора и в консоли."));
+  conn.append(h("button", { class: "btn small", type: "button", onclick: () => go({ lesson: "displays" }) }, "Экраны, переходники, точка доступа Wi-Fi"));
+
+  tools.append(h("h3", {}, "Инструменты"), h("div", { class: "list" }, d.plugins.map(p =>
+    h("div", { class: "item" }, (p.active ? "✔ " : "· ") + p.title, h("small", {}, p.name + " — " + p.status)))));
+  tools.append(h("h3", {}, "Профили (" + d.profiles.length + ")"), h("div", { class: "list" }, d.profiles.map(p =>
+    h("div", { class: "item" }, p.name, h("small", {}, p.id + " · " + p.kind + " · " + (p.voltage ? p.voltage + " В" : "напряжение не указано") + (p.allow_write ? "" : " · только чтение"))))));
+  for (const e of d.profile_errors) tools.append(h("div", { class: "msg e" }, e.file + ": " + e.error));
+  tools.append(h("h3", {}, "Безопасность"), h("dl", { class: "kv" },
+    h("dt", {}, "адаптер"), h("dd", {}, d.safety.programmer_voltage + " В"),
+    h("dt", {}, "слово записи"), h("dd", {}, "«" + d.safety.confirm_word + "»"),
+    h("dt", {}, "чтений для копии"), h("dd", {}, String(d.safety.read_passes)),
+    h("dt", {}, "зеркало копий"), h("dd", {}, d.mirror_dir || "выключено"),
+    h("dt", {}, "данные"), h("dd", { class: "mono" }, d.data_dir),
+    h("dt", {}, "версия"), h("dd", {}, d.version)));
+}
+
+function setScale(x) {
+  x = Math.max(0.8, Math.min(1.8, Math.round(x * 10) / 10));
+  store.set("scale", x); applyPrefs();
+}
+
+function applyPrefs() {
+  document.documentElement.style.setProperty("--scale", store.get("scale", 1));
+  const t = store.get("theme", "auto");
+  if (t === "auto") document.documentElement.removeAttribute("data-theme");
+  else document.documentElement.setAttribute("data-theme", t);
+}
+
+/* =====================================================================
+   Запуск
+   ===================================================================== */
+async function boot() {
+  applyPrefs();
+  if (!emojiSupported()) document.body.classList.add("noemoji");
+  for (const b of document.querySelectorAll(".tab")) b.addEventListener("click", () => showTab(b.dataset.tab));
+  $("#mode").addEventListener("click", () => { setSim(!S.sim, true); render(); });
+  for (;;) {
+    try { S.hello = await api("/api/hello", { noLogin: true }); break; }
+    catch (e) { $("#view").textContent = "Нет связи с прибором. Проверяю снова…"; await sleep(3000); }
+  }
+  const saved = store.get("sim", null);
+  setSim(saved === null ? S.hello.sim_default : saved, false);
+  if (!S.hello.authed) await ensureLogin();
+  S.guide = await api("/api/guide");
+  S.node = S.guide.start;
+  const st = await api("/api/job");
+  applyJob(st.job);
+  showTab(st.job && st.job.running ? "work" : "guide");
+  if (st.job && st.job.running) poll();
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && S.job && !S.job.done) poll(); });
+}
+boot();
+</script>
+</body>
+</html>
