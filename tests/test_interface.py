@@ -543,5 +543,40 @@ class WizardTests(Base):
         self.assertIn("Новый чип за 5 минут", "\n".join(ui.lines))
 
 
+class NavyThemeTests(unittest.TestCase):
+    """Тема «Нави» вместо тёмной: переключатель, переменные обеих тем, работа без сети."""
+
+    TOKENS = ("--tab-radius", "--tab-bg", "--tab-on-bg", "--sh-raised", "--sh-on", "--sh-card",
+              "--sh-press", "--sh-sunken", "--edge", "--font-head", "--bad-ink")
+
+    def setUp(self):
+        self.html = (ROOT / "dirizher" / "interface" / "static" / "index.html").read_text(encoding="utf-8")
+
+    def block(self, selector: str) -> str:
+        self.assertIn(selector + " {", self.html)
+        return self.html.split(selector + " {", 1)[1].split("}", 1)[0]
+
+    def test_switch_offers_navy_instead_of_dark(self):
+        self.assertIn('["navy", "Нави"]', self.html)
+        self.assertNotIn('"Тёмное"', self.html)
+        self.assertIn('t === "dark" ? "navy" : t', self.html)       # старая настройка открывается как «Нави»
+        self.assertIn(':root:not([data-theme="navy"])', self.html)  # системная светлая не перебивает выбор «Нави»
+
+    def test_both_themes_define_shape_and_volume(self):
+        navy = self.block(":root")
+        light = self.block(':root[data-theme="light"]')
+        light_auto = self.block(':root:not([data-theme="navy"])')
+        for token in self.TOKENS:
+            self.assertIn(token + ":", navy, token)
+            self.assertIn(token + ":", light, token)
+            self.assertIn(token + ":", light_auto, token)
+        self.assertIn("--tab-radius: 999px", navy)      # полукруглые вкладки
+        self.assertIn("--sh-raised: none", light)       # светлая тема осталась плоской
+
+    def test_page_works_offline(self):
+        for bad in ("https://", "@import", "url(http", "fonts.googleapis", '<link rel="stylesheet"'):
+            self.assertNotIn(bad, self.html)
+
+
 if __name__ == "__main__":
     unittest.main()
