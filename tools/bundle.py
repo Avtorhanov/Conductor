@@ -11,7 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT = "dirizher_code.txt"
-PATTERNS = ["*.py", "*.yaml", "*.rules", "requirements.txt", ".gitignore"]
+PATTERNS = ["*.py", "*.yaml", "*.rules", "*.html", "*.service", "*.sh", "requirements.txt", ".gitignore"]
 SKIP_DIRS = {"data", "__pycache__", ".git", "docs"}
 
 

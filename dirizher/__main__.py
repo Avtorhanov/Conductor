@@ -1,4 +1,7 @@
-"""Командная строка «Дирижёра».   Запуск:  python3 -m dirizher <команда>"""
+"""Командная строка «Дирижёра».   Запуск:  python3 -m dirizher <команда>
+
+Без команды в терминале открывается пошаговый мастер (Штурман).
+"""
 from __future__ import annotations
 
 import argparse
@@ -105,7 +108,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--config", default=str(ROOT / "config.yaml"), help="путь к config.yaml")
     p.add_argument("--sim", action="store_true", help="учебный режим: виртуальная микросхема вместо железа")
     p.add_argument("--version", action="version", version=f"Дирижёр {__version__}")
-    sub = p.add_subparsers(dest="cmd", required=True, metavar="команда")
+    sub = p.add_subparsers(dest="cmd", metavar="команда")
+
+    w = sub.add_parser("web", help="интерфейс в браузере: ПК, телефон, сенсорный экран прибора")
+    w.add_argument("--host", help="адрес (по умолчанию из config.yaml → web.host)")
+    w.add_argument("--port", type=int, help="порт (по умолчанию из config.yaml → web.port)")
+    sub.add_parser("wizard", help="пошаговый мастер в терминале (SSH, консоль, маленький экран)")
 
     sub.add_parser("plugins", help="какие инструменты подключены")
     sub.add_parser("profiles", help="какие профили загружены")
@@ -152,6 +160,19 @@ def main(argv=None) -> int:
     if args.cmd == "sim":
         args.sim = True
     cfg = load_config(Path(args.config))
+    if args.cmd is None and not sys.stdin.isatty():
+        build_parser().print_help()
+        return 0
+    if args.cmd in (None, "wizard"):
+        from .interface.wizard import Wizard
+        try:
+            return Wizard(cfg, sim=args.sim).run()
+        except KeyboardInterrupt:
+            print("\n   до встречи! Все сделанные копии сохранены.")
+            return 130
+    if args.cmd == "web":
+        from .interface.web import serve
+        return serve(cfg, host=args.host, port=args.port, sim=args.sim)
     ui = ConsoleUI()
     c = Conductor(cfg, ui, sim=args.sim, dry_run=getattr(args, "dry_run", False))
     try:

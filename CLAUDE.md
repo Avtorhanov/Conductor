@@ -11,6 +11,7 @@
 - Тесты: `python3 -m unittest -v`. Они должны проходить до любого коммита.
 - Учебный режим без железа: `python3 -m dirizher sim reset` и `python3 -m dirizher --sim run`.
 - Список плагинов и профилей: `python3 -m dirizher plugins`, `python3 -m dirizher profiles`.
+- Интерфейсы: `python3 -m dirizher web` (браузер: ПК, телефон, экран прибора), `python3 -m dirizher` (мастер в терминале).
 
 ## Карта кода
 - `dirizher/core/pipeline.py` — Conductor, сценарий из 7 шагов. Запись — только через `Conductor.apply()`.
@@ -19,6 +20,7 @@
 - `dirizher/core/checks.py` — проверки (`@register`). `core/safety.py` — условия записи.
 - `core/storage.py` — копии по SHA-256. `core/memory.py` — SQLite. `core/learning.py` — обучение.
 - `core/ui.py` — весь ввод-вывод. `profiles/` — база знаний (YAML).
+- `dirizher/interface/` — слой поверх ядра: `guide.yaml` + `guide.py` (Штурман: вопросы, подсказки, уроки), `web.py` + `static/index.html` (браузер), `wizard.py` (терминал), `builder.py` (конструктор профиля). Ядро о нём не знает: интерфейс подставляет свой `ui`.
 
 ## Жёсткие правила
 - `probe()` только читает. Никакой записи без копии «до», сверки, копии «после» и подтверждения словом.
