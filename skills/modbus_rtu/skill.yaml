@@ -1,0 +1,20 @@
+# Паспорт навыка. Справка — help.md рядом. Настройки лезвия можно задать и в config.yaml
+# (plugins: modbus_rtu: …) — они важнее этих.
+id: modbus_rtu
+title: Modbus RTU (RS-485)
+kind: tool
+version: 1
+enabled: true
+summary: "Читает и меняет настройки приборов по Modbus RTU: термопреобразователи, регуляторы, счётчики."
+settings:
+  enabled: false          # включите, когда подключите переходник USB–RS-485
+  port: /dev/ttyUSB0
+  baud: 9600              # как в меню прибора
+  parity: N               # N, E или O
+  stopbits: 1
+  unit: 1                 # сетевой адрес прибора, 1…247
+  model: THERMO-EXAMPLE   # модель — по ней выбирается карта параметров (match: name)
+  timeout: 1.0            # ожидание ответа, с
+  retries: 2
+  write_function: 6       # 6 — по одному регистру (понимают все); 16 — пачкой
+  echo: false             # true — если переходник возвращает свои же байты

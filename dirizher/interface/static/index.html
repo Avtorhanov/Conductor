@@ -312,6 +312,32 @@ textarea.in { min-height: 5rem; resize: vertical; }
 .login { position: fixed; inset: 0; z-index: 70; background: var(--bg); display: flex; align-items: center; justify-content: center; padding: 1rem; }
 .login .card { max-width: 380px; width: 100%; text-align: center; }
 .login input { text-align: center; font-size: 1.8rem; letter-spacing: .3em; }
+
+/* ---------- мастерская: справка, капот, навыки ---------- */
+.pill.icon { padding: .35rem .7rem; font-family: var(--mono); font-weight: 700; min-width: 2.4rem; justify-content: center; }
+.seg.wrap { flex-wrap: wrap; display: flex; }
+.seg.wrap button { flex: 1 1 auto; }
+textarea.editor {
+  font-family: var(--mono); font-size: .82rem; line-height: 1.5; min-height: 55vh; white-space: pre;
+  overflow: auto; tab-size: 4; resize: vertical;
+}
+textarea.editor[readonly] { opacity: .85; }
+.md { overflow-wrap: anywhere; }
+#modeText { white-space: nowrap; }
+@media (max-width: 420px) { .top { gap: .4rem; padding-left: .7rem; padding-right: .7rem; } .brand { font-size: 1rem; } }
+.md h2 { margin-top: 1.1rem; } .md h3 { text-transform: none; letter-spacing: 0; color: var(--text); }
+.md code { font-family: var(--mono); font-size: .85em; background: var(--surface2); padding: .05rem .3rem; border-radius: 5px; }
+.md table { border-collapse: collapse; width: 100%; font-size: .9rem; margin: .5rem 0 1rem; display: block; overflow-x: auto; }
+.md th, .md td { border: 1px solid var(--line); padding: .35rem .5rem; text-align: left; vertical-align: top; }
+.md th { background: var(--surface2); }
+.md ul, .md ol { padding-left: 1.3rem; } .md li { margin: .25rem 0; }
+.params .prow { display: grid; grid-template-columns: 1fr minmax(7rem, 11rem); gap: .6rem; align-items: center; padding: .45rem 0; border-bottom: 1px solid var(--line); }
+.params .prow:last-child { border-bottom: 0; }
+.params .prow small { display: block; color: var(--muted); font-size: .8rem; }
+.params .prow .ro { text-align: right; font-family: var(--mono); }
+.params .prow.changed b { color: var(--accent); }
+.lvl { font-weight: 700; margin-right: .3rem; }
+.lvl.bad { color: var(--bad); } .lvl.warn { color: var(--warn); } .lvl.info { color: var(--muted); }
 </style>
 </head>
 <body>
@@ -325,6 +351,8 @@ textarea.in { min-height: 5rem; resize: vertical; }
     </div>
     <span id="net" class="net" hidden>нет связи…</span>
     <div class="spacer"></div>
+    <button id="helpBtn" class="pill icon" type="button" title="Справка по разделу" aria-label="Справка по разделу">?</button>
+    <button id="hoodBtn" class="pill icon" type="button" title="Капот: код и настройки раздела" aria-label="Капот: код и настройки раздела">&lt;/&gt;</button>
     <button id="mode" class="pill" type="button" title="Переключить режим"><span class="dot"></span><span id="modeText">…</span></button>
   </header>
 
@@ -340,7 +368,7 @@ textarea.in { min-height: 5rem; resize: vertical; }
       <span>Журнал</span></button>
     <button class="tab" data-tab="dev" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5a4 4 0 0 0 4.9 5.2L12 18.1a2.1 2.1 0 1 1-3-3l7.4-7.4"/><path d="M4 4l4 4M3 8l2-2"/></svg>
-      <span>Развитие</span></button>
+      <span>Навыки</span></button>
     <button class="tab" data-tab="device" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg>
       <span>Прибор</span></button>
@@ -476,7 +504,7 @@ function setSim(v, announce) {
   S.sim = !!v; store.set("sim", S.sim);
   const b = $("#mode");
   b.classList.toggle("sim", S.sim);
-  $("#modeText").textContent = S.sim ? "Учебный режим" : "Железо";
+  $("#modeText").textContent = S.sim ? (window.innerWidth < 420 ? "Учебный" : "Учебный режим") : "Железо";
   if (announce) toast(S.sim ? "Учебный режим: виртуальная микросхема, железо не используется" : "Работа с настоящим железом");
 }
 
@@ -518,6 +546,10 @@ function optTag(o) {
   if (o.action === "detect") return ["только чтение", "tag-ok"];
   if (o.action === "capture") return ["только приём", "tag-ok"];
   if (o.action === "sim") return ["учебный", "tag-sim"];
+  if (o.action === "params") return ["только чтение", "tag-ok"];
+  if (o.action === "tune") return p.dry_run ? ["без записи", "tag-ok"] : ["запись после «ДА»", "tag-warn"];
+  if (o.action === "tune_form") return ["запись после «ДА»", "tag-warn"];
+  if (o.action === "help") return ["справка", "tag-info"];
   return null;
 }
 
@@ -552,6 +584,12 @@ const VIEW_ACTIONS = {
   roadmap: () => showTab("dev"),
   builder: p => openPage(v => renderBuilder(v, p.draft)),
   show: p => openPage(v => renderSession(v, p.session)),
+  skills: () => showTab("dev"),
+  help: p => openPage(v => p.article ? renderArticle(v, p.article) : renderHelp(v, "", S.tab)),
+  hood: p => openPage(v => renderHood(v, p.area || S.tab)),
+  doctor: () => openPage(renderDoctor),
+  tune_form: p => openPage(v => renderTune(v, p.session)),
+  fix: p => fixModal(p.session, p.fix),
 };
 const PICK = { rollback: "rollback", feedback: "feedback", reference: "reference", export: "export" };
 
@@ -625,7 +663,7 @@ function promptText(title, hint, placeholder) {
   return new Promise(resolve => {
     let done = false;
     const finish = v => { if (!done) { done = true; resolve(v); } };
-    const input = h("input", { class: "in", type: "text", placeholder: placeholder || "", maxlength: "80" });
+    const input = h("input", { class: "in", type: "text", placeholder: placeholder || "", maxlength: "300" });
     const form = h("form", {}, h("p", { class: "muted" }, hint), input,
       h("div", { class: "row end", style: "margin-top:1rem" },
         h("button", { class: "btn ghost", type: "button", onclick: () => m.close() }, "Отмена"),
@@ -944,6 +982,14 @@ async function renderSession(v, sid) {
       h("a", { class: "btn small", href: "/api/download?sid=" + sid + "&kind=" + sn.kind + "&sim=" + (S.sim ? 1 : 0), download: "" }, "Скачать")));
     v.append(snaps);
   }
+  if (d.actions.some(a => a.action === "tune_form")) {
+    const pc = h("section", { class: "card params" }, h("h3", {}, "Параметры"));
+    v.append(pc);
+    api("/api/params?session=" + sid + "&sim=" + (S.sim ? 1 : 0)).then(r => {
+      if (!alive()) return;
+      for (const p of r.params) pc.append(h("div", { class: "prow" }, h("div", {}, p.title), h("div", { class: "ro" }, p.text)));
+    }).catch(() => pc.remove());
+  }
   if (d.actions.length) v.append(h("section", { class: "card" }, h("h3", {}, "Действия"), h("div", { class: "opts" }, d.actions.map(optButton))));
   v.append(h("section", { class: "card" }, h("h3", {}, "Журнал событий"),
     h("div", { class: "events" }, d.events.map(e => e.ts + " [" + e.level + "] " + e.message).join("\n"))));
@@ -962,6 +1008,21 @@ function lessonList(group) {
 }
 
 async function renderDev(v) {
+  const alive = liveCheck();
+  const skills = h("div", { class: "list" }, h("p", { class: "muted" }, "Загружаю…"));
+  v.append(h("section", { class: "card" },
+    h("div", { class: "row", style: "justify-content:space-between" }, h("h2", {}, "Навыки"),
+      h("div", { class: "row" },
+        h("button", { class: "btn small ghost", type: "button", onclick: () => openPage(w => renderArticle(w, "skills")) }, "?"),
+        h("button", { class: "btn small primary", type: "button", onclick: newSkillModal }, "+ Навык"))),
+    h("p", { class: "muted" }, "Новые протоколы, карты параметров и проверки — без правки ядра. Код каждого — в капоте."), skills));
+  api("/api/skills?sim=" + (S.sim ? 1 : 0)).then(r => {
+    if (!alive()) return;
+    skills.textContent = "";
+    if (!r.items.length && !r.broken.length) skills.append(h("p", { class: "muted" }, "Пока ни одного — нажмите «+ Навык»."));
+    r.items.forEach(sk => skills.append(skillCard(sk)));
+    r.broken.forEach(b => skills.append(h("div", { class: "msg e" }, b.path + ": " + b.error)));
+  }).catch(e => { skills.textContent = e.message; });
   const road = h("ol", { class: "steps" }, h("li", { class: "muted" }, "Загружаю…"));
   v.append(h("section", { class: "card" }, h("h2", {}, "Что делать дальше по плану"),
     h("p", { class: "muted" }, "Шаги из docs/STATUS.md — их обновляют в конце каждой сессии разработки."), road,
@@ -969,14 +1030,22 @@ async function renderDev(v) {
   v.append(h("section", { class: "card" }, h("h2", {}, "Конструктор профиля чипа"),
     h("p", { class: "muted" }, "Заполните паспорт чипа по даташиту — конструктор проверит поля, покажет YAML и подскажет. Включить профиль можно только после вашей проверки."),
     h("button", { class: "btn primary", type: "button", onclick: () => openPage(w => renderBuilder(w)) }, "Открыть конструктор")));
-  v.append(h("section", { class: "card" }, h("h2", {}, "Уроки: развитие"), lessonList("dev")));
-  v.append(h("section", { class: "card" }, h("h2", {}, "Уроки: работа"), lessonList("work")));
+  v.append(h("section", { class: "card" }, h("h2", {}, "Уроки и справка"),
+    h("div", { class: "row" },
+      h("button", { class: "btn small", type: "button", onclick: () => openPage(w => renderLessons(w, "dev")) }, "Уроки: развитие"),
+      h("button", { class: "btn small", type: "button", onclick: () => openPage(w => renderLessons(w, "work")) }, "Уроки: работа"),
+      h("button", { class: "btn small", type: "button", onclick: () => openPage(w => renderHelp(w, "", "dev")) }, "Справка"))));
   try {
     const r = await api("/api/roadmap");
+    if (!alive()) return;
     road.textContent = "";
     if (!r.items.length) road.append(h("li", { class: "muted" }, "docs/STATUS.md не найден рядом с config.yaml."));
     for (const it of r.items) road.append(h("li", {}, it));
   } catch (e) { road.textContent = e.message; }
+}
+
+function renderLessons(v, group) {
+  v.append(backBtn(), h("section", { class: "card" }, h("h1", {}, group === "dev" ? "Уроки: развитие" : "Уроки: работа"), lessonList(group)));
 }
 
 function renderLesson(v, id) {
@@ -987,12 +1056,7 @@ function renderLesson(v, id) {
   const ol = h("ol", { class: "steps" });
   for (const st of l.steps) {
     const li = h("li", {}, h("div", {}, st.text));
-    if (st.code) {
-      const code = st.code.replace(/\s+$/, "");
-      const btn = h("button", { class: "btn small copy", type: "button" }, "Копировать");
-      btn.addEventListener("click", async () => { toast(await copyText(code) ? "Скопировано" : "Не удалось скопировать — выделите текст вручную"); });
-      li.append(h("div", { class: "code" }, h("pre", {}, code), btn));
-    }
+    if (st.code) li.append(codeBox(st.code));
     ol.append(li);
   }
   card.append(ol);
@@ -1110,7 +1174,11 @@ async function renderDevice(v) {
   const conn = h("section", { class: "card" }, h("h2", {}, "Подключить телефон или ПК"), h("p", { class: "muted" }, "Загружаю…"));
   v.append(conn);
   const tools = h("section", { class: "card" }, h("h2", {}, "Инструменты и профили"));
-  v.append(tools);
+  const care = h("section", { class: "card" }, h("h2", {}, "Самопроверка и капот"),
+    h("p", { class: "muted" }, "Копии, память, профили, навыки — проверка и починка того, что чинится без догадок."),
+    h("div", { class: "row" }, h("button", { class: "btn primary", type: "button", onclick: () => openPage(renderDoctor) }, "Самопроверка"),
+      h("button", { class: "btn", type: "button", onclick: () => openPage(w => renderHood(w, "device")) }, "Капот")));
+  v.append(care, tools);
   v.append(h("section", { class: "card" }, h("h2", {}, "Экран"),
     h("p", { class: "muted" }, "Размер текста — для маленьких экранов прибора и для работы издалека."),
     h("div", { class: "row" },
@@ -1121,6 +1189,7 @@ async function renderDevice(v) {
     seg(THEMES, theme, val => { store.set("theme", val); applyPrefs(); render(); })));
   let d;
   try { d = await api("/api/device?sim=" + (S.sim ? 1 : 0)); } catch (e) { conn.lastChild.textContent = e.message; return; }
+  care.append(hoodBanner(d.hood));
   conn.textContent = "";
   conn.append(h("h2", {}, "Подключить телефон или ПК"),
     h("p", { class: "muted" }, "Телефон и прибор — в одной сети Wi-Fi. Откройте на телефоне один из адресов:"),
@@ -1130,7 +1199,7 @@ async function renderDevice(v) {
   conn.append(h("button", { class: "btn small", type: "button", onclick: () => go({ lesson: "displays" }) }, "Экраны, переходники, точка доступа Wi-Fi"));
 
   tools.append(h("h3", {}, "Инструменты"), h("div", { class: "list" }, d.plugins.map(p =>
-    h("div", { class: "item" }, (p.active ? "✔ " : "· ") + p.title, h("small", {}, p.name + " — " + p.status)))));
+    h("div", { class: "item" }, (p.active ? "✔ " : "· ") + p.title, h("small", {}, p.name + (p.skill ? " (навык)" : "") + " — " + p.status)))));
   tools.append(h("h3", {}, "Профили (" + d.profiles.length + ")"), h("div", { class: "list" }, d.profiles.map(p =>
     h("div", { class: "item" }, p.name, h("small", {}, p.id + " · " + p.kind + " · " + (p.voltage ? p.voltage + " В" : "напряжение не указано") + (p.allow_write ? "" : " · только чтение"))))));
   for (const e of d.profile_errors) tools.append(h("div", { class: "msg e" }, e.file + ": " + e.error));
@@ -1156,6 +1225,442 @@ function applyPrefs() {
 }
 
 /* =====================================================================
+   Мастерская: общие куски
+   ===================================================================== */
+function codeBox(code) {
+  code = String(code).replace(/\s+$/, "");
+  const btn = h("button", { class: "btn small copy", type: "button" }, "Копировать");
+  btn.addEventListener("click", async () => { toast(await copyText(code) ? "Скопировано" : "Не удалось скопировать — выделите текст вручную"); });
+  return h("div", { class: "code" }, h("pre", {}, code), btn);
+}
+
+function replacePage(fn) { S.pages[S.pages.length - 1] = fn; render(); }
+
+function msgList(box, r, okText) {
+  box.textContent = "";
+  (r.errors || []).forEach(t => box.append(h("div", { class: "msg e" }, t)));
+  (r.warnings || []).forEach(t => box.append(h("div", { class: "msg w" }, t)));
+  (r.hints || []).forEach(t => box.append(h("div", { class: "msg h" }, t)));
+  if (!(r.errors || []).length && okText) box.append(h("div", { class: "msg h" }, okText));
+}
+
+/* Markdown → DOM: заголовки, абзацы, списки, таблицы, код, **жирный**, `код`, ссылки. Без innerHTML. */
+function md(text) {
+  const out = h("div", { class: "md" });
+  const lines = String(text || "").replace(/\r/g, "").split("\n");
+  const LIST = /^\s*([-*]|\d+\.)\s+/;
+  const inline = s => {
+    const nodes = [], re = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)\s]+\))/g;
+    let last = 0, m;
+    while ((m = re.exec(s))) {
+      if (m.index > last) nodes.push(s.slice(last, m.index));
+      const t = m[0];
+      if (t.startsWith("**")) nodes.push(h("b", {}, t.slice(2, -2)));
+      else if (t.startsWith("`")) nodes.push(h("code", {}, t.slice(1, -1)));
+      else {
+        const mm = /\[([^\]]+)\]\(([^)\s]+)\)/.exec(t);
+        nodes.push(/^https?:\/\//.test(mm[2]) ? h("a", { href: mm[2], target: "_blank", rel: "noopener" }, mm[1]) : mm[1]);
+      }
+      last = m.index + t.length;
+    }
+    if (last < s.length) nodes.push(s.slice(last));
+    return nodes;
+  };
+  let i = 0;
+  while (i < lines.length) {
+    const ln = lines[i];
+    if (/^\s*```/.test(ln)) {
+      const indent = ln.match(/^\s*/)[0].length, buf = [];
+      i++;
+      while (i < lines.length && !/^\s*```/.test(lines[i])) buf.push(lines[i++].slice(indent));
+      i++;
+      out.append(codeBox(buf.join("\n")));
+      continue;
+    }
+    const hm = /^(#{1,4})\s+(.*)$/.exec(ln);
+    if (hm) { out.append(h(hm[1].length <= 1 ? "h2" : "h3", {}, inline(hm[2]))); i++; continue; }
+    if (/^\s*\|/.test(ln)) {
+      const rows = [];
+      while (i < lines.length && /^\s*\|/.test(lines[i])) rows.push(lines[i++].trim());
+      const cells = r => r.replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+      const table = h("table", {});
+      rows.forEach((r, n) => {
+        if (/^\|[\s:|-]+\|$/.test(r)) return;
+        table.append(h("tr", {}, cells(r).map(c => h(n === 0 ? "th" : "td", {}, inline(c)))));
+      });
+      out.append(table);
+      continue;
+    }
+    if (LIST.test(ln)) {
+      const list = h(/^\s*\d+\./.test(ln) ? "ol" : "ul", {});
+      while (i < lines.length && LIST.test(lines[i])) {
+        const li = h("li", {}, inline(lines[i].replace(LIST, "")));
+        i++;
+        while (i < lines.length && /^\s{2,}\S/.test(lines[i]) && !LIST.test(lines[i]) && !/^\s*```/.test(lines[i])) {
+          li.append(" ", ...inline(lines[i].trim())); i++;
+        }
+        list.append(li);
+      }
+      out.append(list);
+      continue;
+    }
+    if (!ln.trim()) { i++; continue; }
+    const para = [ln.trim()];
+    i++;
+    while (i < lines.length && lines[i].trim() && !/^(\s*#|\s*```|\s*\|)/.test(lines[i]) && !LIST.test(lines[i])) para.push(lines[i++].trim());
+    out.append(h("p", {}, inline(para.join(" "))));
+  }
+  return out;
+}
+
+function hoodBanner(st, onChange) {
+  if (st.open) {
+    return h("div", { class: "row muted", style: "margin:.2rem 0 .6rem" }, "✎ Капот открыт" + (st.permanent ? " (hood.edit: true)" : " до перезапуска"),
+      st.local && !st.permanent ? h("button", { class: "btn small ghost", type: "button", onclick: () => setHood(false, onChange) }, "Закрыть") : null);
+  }
+  return h("div", { class: "msg w" }, "🔒 Капот закрыт — только просмотр. ",
+    st.local ? h("button", { class: "btn small", type: "button", onclick: () => setHood(true, onChange) }, "Открыть до перезапуска")
+      : "Открыть можно на экране самого прибора или hood.edit: true в config.yaml.");
+}
+
+async function setHood(open, onChange) {
+  try { await api("/api/hood/unlock", { json: { open } }); toast(open ? "Капот открыт до перезапуска" : "Капот закрыт"); (onChange || render)(); }
+  catch (e) { toast(e.message, "bad"); }
+}
+
+/* =====================================================================
+   Справка
+   ===================================================================== */
+async function renderHelp(v, q, section) {
+  const alive = liveCheck();
+  v.append(backBtn());
+  const input = h("input", { class: "in", type: "search", placeholder: "Поиск: диапазон, капот, прищепка…", value: q || "" });
+  const list = h("div", { class: "opts" }, h("p", { class: "muted" }, "Загружаю…"));
+  const addBtn = h("button", { class: "btn small", type: "button", onclick: newArticleModal }, "+ Статья");
+  v.append(h("section", { class: "card" }, h("div", { class: "row", style: "justify-content:space-between" }, h("h1", {}, "Справка"), addBtn),
+    input, h("div", { style: "margin-top:.8rem" }, list)));
+  let timer = null;
+  const load = async () => {
+    try {
+      const r = await api("/api/help?q=" + encodeURIComponent(input.value) + "&section=" + (section || ""));
+      if (!alive()) return;
+      list.textContent = "";
+      if (!r.items.length) list.append(h("p", { class: "muted" }, "Ничего не нашлось."));
+      for (const it of r.items) list.append(optButton(it.kind === "lesson"
+        ? { label: it.title, explain: it.summary, lesson: it.lesson }
+        : { label: it.title, explain: it.summary || it.source, action: "help", params: { article: it.id } }));
+    } catch (e) { list.textContent = e.message; }
+  };
+  input.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(load, 250); });
+  load();
+}
+
+async function renderArticle(v, id) {
+  const alive = liveCheck();
+  v.append(backBtn());
+  const card = h("article", { class: "card" }, h("p", { class: "muted" }, "Загружаю…"));
+  v.append(card);
+  let a;
+  try { a = await api("/api/help/article?id=" + encodeURIComponent(id)); } catch (e) { card.textContent = e.message; return; }
+  if (!alive()) return;
+  card.textContent = "";
+  let body = a.text;
+  if (/^#\s/.test(body)) body = body.replace(/^#\s+.*\n?/, "");
+  card.append(h("h1", {}, a.title), md(body));
+  card.append(h("div", { class: "row", style: "margin-top:.6rem" },
+    h("span", { class: "muted", style: "flex:1" }, a.source),
+    a.editable ? h("button", { class: "btn small", type: "button", onclick: () => openPage(w => renderEditor(w, a.path)) }, "Править") : null,
+    h("button", { class: "btn small ghost", type: "button", onclick: () => openPage(w => renderHelp(w, "", "")) }, "Вся справка")));
+}
+
+function newArticleModal() {
+  const id = h("input", { class: "in", placeholder: "my_router", autocapitalize: "off", spellcheck: "false" });
+  const title = h("input", { class: "in", placeholder: "Роутер X1 — особенности" });
+  const sec = h("select", { class: "in" }, [["work", "Работа"], ["guide", "Штурман"], ["log", "Журнал"], ["dev", "Навыки"], ["device", "Прибор"]]
+    .map(([k, t]) => h("option", { value: k }, t)));
+  const err = h("div", { class: "msg e", hidden: true });
+  const form = h("form", {}, h("label", { class: "f" }, h("b", {}, "Имя файла"), h("small", {}, "латиница, цифры, _ и -"), id),
+    h("label", { class: "f" }, h("b", {}, "Название"), title), h("label", { class: "f" }, h("b", {}, "Раздел"), sec), err,
+    h("div", { class: "row end" }, h("button", { class: "btn ghost", type: "button", onclick: () => m.close() }, "Отмена"),
+      h("button", { class: "btn primary", type: "submit" }, "Создать")));
+  form.addEventListener("submit", async ev => {
+    ev.preventDefault();
+    try {
+      const r = await api("/api/help/new", { json: { id: id.value, title: title.value, section: sec.value } });
+      m.close(); toast("Статья создана"); openPage(w => renderEditor(w, r.open));
+    } catch (e) { err.textContent = e.message; err.hidden = false; }
+  });
+  const m = modal("Новая статья", form);
+}
+
+/* =====================================================================
+   Капот
+   ===================================================================== */
+async function renderHood(v, area) {
+  const alive = liveCheck();
+  v.append(backBtn());
+  const card = h("section", { class: "card" }, h("h1", {}, "Капот"), h("p", { class: "muted" }, "Загружаю…"));
+  v.append(card);
+  let r;
+  try { r = await api("/api/hood?area=" + encodeURIComponent(area)); } catch (e) { card.lastChild.textContent = e.message; return; }
+  if (!alive()) return;
+  card.textContent = "";
+  card.append(h("div", { class: "row", style: "justify-content:space-between" }, h("h1", {}, "Капот"),
+      h("button", { class: "btn small ghost", type: "button", onclick: () => openPage(w => renderArticle(w, "hood")) }, "?")),
+    hoodBanner(r),
+    h("div", { class: "seg wrap" }, r.areas.map(a => h("button", { type: "button", "aria-pressed": String(a.id === area),
+      onclick: () => replacePage(w => renderHood(w, a.id)) }, a.title))));
+  const list = h("div", { class: "list", style: "margin-top:.8rem" });
+  for (const f of r.files) list.append(h("button", { class: "item", type: "button", onclick: () => openPage(w => renderEditor(w, f.path)) },
+    h("span", { class: "mono" }, f.path), h("small", {}, (f.mode === "edit" ? "✎ можно править" : "🔒 " + f.reason) + " · " + fmtSize(f.size))));
+  if (!r.files.length) list.append(h("p", { class: "muted" }, "В этом разделе файлов нет."));
+  card.append(list);
+  const extra = area === "dev" ? h("button", { class: "btn small primary", type: "button", onclick: newSkillModal }, "+ Навык")
+    : area === "help" ? h("button", { class: "btn small primary", type: "button", onclick: newArticleModal }, "+ Статья") : null;
+  if (extra) card.append(h("div", { class: "row", style: "margin-top:.8rem" }, extra));
+}
+
+async function renderEditor(v, path) {
+  const alive = liveCheck();
+  v.append(backBtn());
+  let f;
+  try { f = await api("/api/hood/file?path=" + encodeURIComponent(path)); } catch (e) { v.append(h("div", { class: "card" }, e.message)); return; }
+  if (!alive()) return;
+  const canEdit = f.mode === "edit" && f.open;
+  const ta = h("textarea", { class: "in editor", spellcheck: "false", autocapitalize: "off", autocomplete: "off", wrap: "off", "aria-label": path });
+  ta.value = f.text; ta.readOnly = !canEdit;
+  ta.addEventListener("keydown", ev => {
+    if (ev.key === "Tab" && !ta.readOnly && !ev.shiftKey) { ev.preventDefault(); ta.setRangeText("    ", ta.selectionStart, ta.selectionEnd, "end"); }
+  });
+  const msgs = h("div", {});
+  const word = h("input", { class: "in", type: "text", autocomplete: "off", autocapitalize: "characters", spellcheck: "false",
+    placeholder: "слово «" + (f.word || "ДА") + "»", style: "max-width:9rem;min-height:2.3rem", "aria-label": "Слово подтверждения" });
+  const busy = async (btn, fn) => { btn.disabled = true; try { await fn(); } catch (e) { toast(e.message, "bad"); } btn.disabled = false; };
+  const checkBtn = h("button", { class: "btn small", type: "button" }, "Проверить");
+  checkBtn.addEventListener("click", () => busy(checkBtn, async () => msgList(msgs, await api("/api/hood/check", { json: { path, text: ta.value } }), "Проверка пройдена.")));
+  const saveBtn = h("button", { class: "btn small primary", type: "button", hidden: !canEdit }, "Сохранить");
+  saveBtn.addEventListener("click", () => busy(saveBtn, async () => {
+    const r = await api("/api/hood/save", { json: { path, text: ta.value, word: word.value } });
+    msgList(msgs, r, r.ok ? (r.unchanged ? "Без изменений." : "Сохранено. Прежняя версия — в истории.") : "");
+    if (r.ok && !r.unchanged) { toast("Сохранено"); word.value = ""; }
+  }));
+  const card = h("section", { class: "card" }, h("h2", { class: "mono", style: "font-size:1rem;word-break:break-all" }, path));
+  if (f.mode === "view") card.append(h("div", { class: "msg w" }, "🔒 Только просмотр: " + f.reason));
+  else if (!f.open) card.append(hoodBanner({ open: false, local: S.hello && S.hello.local }, () => replacePage(w => renderEditor(w, path))));
+  card.append(ta, h("div", { class: "row", style: "margin-top:.6rem" }, checkBtn,
+    canEdit && f.needs_word ? word : null, saveBtn,
+    h("button", { class: "btn small ghost", type: "button", onclick: () => openPage(w => renderHistory(w, path)) }, "История" + (f.versions ? " (" + f.versions + ")" : "")),
+    h("button", { class: "btn small ghost", type: "button", onclick: () => openPage(w => renderArticle(w, "hood")) }, "?")), msgs);
+  v.append(card);
+}
+
+async function renderHistory(v, path) {
+  const alive = liveCheck();
+  v.append(backBtn());
+  const card = h("section", { class: "card" }, h("h2", {}, "История"), h("p", { class: "mono muted" }, path));
+  v.append(card);
+  let r;
+  try { r = await api("/api/hood/history?path=" + encodeURIComponent(path)); } catch (e) { card.append(e.message); return; }
+  if (!alive()) return;
+  const list = h("div", { class: "list" });
+  if (!r.items.length) list.append(h("p", { class: "muted" }, "Правок через капот ещё не было."));
+  for (const it of r.items) list.append(h("button", { class: "item", type: "button", onclick: () => openPage(w => renderVersion(w, path, it)) },
+    it.ts + " · " + it.note, h("small", {}, (it.actor ? it.actor + " · " : "") + it.sha.slice(0, 12) + (it.good ? " · проверена" : ""))));
+  card.append(list);
+}
+
+async function renderVersion(v, path, it) {
+  v.append(backBtn());
+  let r;
+  try { r = await api("/api/hood/version?path=" + encodeURIComponent(path) + "&v=" + encodeURIComponent(it.vid)); } catch (e) { v.append(e.message); return; }
+  const word = h("input", { class: "in", type: "text", autocomplete: "off", placeholder: "слово «ДА»", style: "max-width:9rem;min-height:2.3rem" });
+  const msgs = h("div", {});
+  const btn = h("button", { class: "btn small primary", type: "button" }, "Вернуть эту версию");
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    try {
+      const res = await api("/api/hood/restore", { json: { path, v: it.vid, word: word.value } });
+      msgList(msgs, res, res.ok ? "Версия возвращена. Текущая — в истории." : "");
+      if (res.ok) toast("Версия возвращена");
+    } catch (e) { toast(e.message, "bad"); }
+    btn.disabled = false;
+  });
+  const ta = h("textarea", { class: "in editor", readonly: true, wrap: "off" }); ta.value = r.text;
+  v.append(h("section", { class: "card" }, h("h2", {}, it.ts + " · " + it.note), ta,
+    h("div", { class: "row", style: "margin-top:.6rem" }, word, btn), msgs));
+}
+
+/* =====================================================================
+   Навыки
+   ===================================================================== */
+async function newSkillModal() {
+  let info;
+  try { info = await api("/api/skills?sim=" + (S.sim ? 1 : 0)); } catch (e) { return toast(e.message, "bad"); }
+  if (!info.hood.open) return toast("Капот закрыт — откройте его на экране прибора («Прибор» → «Открыть капот»)", "bad");
+  const DESC = { map: "прибор уже на связи (например, Modbus) — описать его настройки, без кода",
+    tool: "свой протокол или программа — шаблон лезвия", check: "своя проверка дампа" };
+  let kind = "map";
+  const seg = h("div", { class: "opts" });
+  const cls = h("select", { class: "in" }, (info.classes.length ? info.classes : ["device.modbus"]).map(c => h("option", { value: c }, c)));
+  if (info.classes.indexOf("device.modbus") >= 0) cls.value = "device.modbus";
+  const clsRow = h("label", { class: "f" }, h("b", {}, "Класс устройства"), h("small", {}, "какое лезвие его видит"), cls);
+  const drawKinds = () => {
+    seg.textContent = "";
+    for (const k of info.kinds) seg.append(h("button", { class: "opt" + (k.id === kind ? " important" : ""), type: "button",
+      onclick: () => { kind = k.id; drawKinds(); clsRow.hidden = kind !== "map"; } },
+      h("span", { class: "txt" }, h("b", {}, k.title), h("small", {}, DESC[k.id] || ""))));
+  };
+  drawKinds();
+  const id = h("input", { class: "in", placeholder: "thermo_trm", autocapitalize: "off", spellcheck: "false" });
+  const title = h("input", { class: "in", placeholder: "Термопреобразователь ТРМ" });
+  const err = h("div", { class: "msg e", hidden: true });
+  const form = h("form", {}, seg, h("label", { class: "f", style: "margin-top:.8rem" }, h("b", {}, "Имя"), h("small", {}, "латиница, цифры и _"), id),
+    h("label", { class: "f" }, h("b", {}, "Название"), title), clsRow, err,
+    h("div", { class: "row end" }, h("button", { class: "btn ghost", type: "button", onclick: () => m.close() }, "Отмена"),
+      h("button", { class: "btn primary", type: "submit" }, "Создать")));
+  form.addEventListener("submit", async ev => {
+    ev.preventDefault();
+    try {
+      const r = await api("/api/skills/new", { json: { kind, id: id.value, title: title.value, target_class: cls.value } });
+      m.close(); toast("Навык создан: " + r.files.length + " файла"); openPage(w => renderEditor(w, r.open));
+    } catch (e) { err.textContent = e.message; err.hidden = false; }
+  });
+  const m = modal("Новый навык", form);
+}
+
+function skillCard(sk) {
+  const status = sk.errors.length ? "✖ ошибка" : !sk.enabled ? "выключен" : sk.plugins.some(p => p.active) ? "✔ работает" : "✔ загружен";
+  const sub = [sk.kind === "tool" ? "инструмент" : sk.kind === "map" ? "карта параметров" : "проверка", status]
+    .concat(sk.plugins.map(p => p.name + ": " + p.status)).join(" · ");
+  return h("button", { class: "item", type: "button", onclick: () => openPage(w => renderSkill(w, sk)) }, sk.title, h("small", {}, sub));
+}
+
+async function renderSkill(v, sk) {
+  const alive = liveCheck();
+  v.append(backBtn());
+  const card = h("section", { class: "card" }, h("h1", {}, sk.title), sk.summary ? h("p", { class: "muted" }, sk.summary) : null);
+  sk.errors.forEach(t => card.append(h("div", { class: "msg e" }, t)));
+  sk.warnings.forEach(t => card.append(h("div", { class: "msg w" }, t)));
+  card.append(h("dl", { class: "kv" }, h("dt", {}, "папка"), h("dd", { class: "mono" }, sk.path),
+    sk.plugins.length ? [h("dt", {}, "лезвия"), h("dd", {}, sk.plugins.map(p => p.name + " — " + p.status).join("; "))] : null,
+    sk.profiles.length ? [h("dt", {}, "профили"), h("dd", {}, sk.profiles.join(", "))] : null));
+  const files = h("div", { class: "list", style: "margin-top:.8rem" });
+  card.append(h("h3", {}, "Файлы"), files,
+    h("div", { class: "row", style: "margin-top:.8rem" }, sk.help ? h("button", { class: "btn small", type: "button", onclick: () => openPage(w => renderArticle(w, sk.help)) }, "Справка навыка") : null,
+      sk.kind === "map" || sk.profiles.length ? h("button", { class: "btn small", type: "button", onclick: () => go({ action: "params" }) }, "Прочитать параметры") : null));
+  v.append(card);
+  try {
+    const r = await api("/api/hood?area=dev");
+    if (!alive()) return;
+    for (const f of r.files.filter(f => f.path.startsWith(sk.path + "/"))) files.append(h("button", { class: "item", type: "button",
+      onclick: () => openPage(w => renderEditor(w, f.path)) }, h("span", { class: "mono" }, f.path.slice(sk.path.length + 1)), h("small", {}, f.mode === "edit" ? "✎" : "🔒")));
+  } catch (e) { files.textContent = e.message; }
+}
+
+/* =====================================================================
+   Параметры прибора
+   ===================================================================== */
+async function renderTune(v, sid) {
+  const alive = liveCheck();
+  v.append(backBtn());
+  const card = h("section", { class: "card" }, h("h1", {}, "Изменить параметры"), h("p", { class: "muted" }, "Загружаю…"));
+  v.append(card);
+  let d;
+  try { d = await api("/api/params?sim=" + (S.sim ? 1 : 0) + (sid ? "&session=" + sid : "")); }
+  catch (e) {
+    card.lastChild.textContent = e.message;
+    card.append(h("button", { class: "btn primary", type: "button", onclick: () => go({ action: "params" }) }, "Прочитать параметры"));
+    return;
+  }
+  if (!alive()) return;
+  card.textContent = "";
+  card.append(h("h1", {}, d.profile_name), h("p", { class: "muted" }, "Значения из сеанса №" + d.session + " (" + d.ts + ")" +
+    (d.verified ? "" : " — чтения НЕ совпали") + ". Перед записью Дирижёр прочитает прибор заново."));
+  const wanted = {};
+  const box = h("div", { class: "params" });
+  for (const p of d.params) {
+    const row = h("div", { class: "prow" });
+    const label = h("div", {}, h("b", {}, p.title), h("small", {}, [p.min != null || p.max != null ? (p.min ?? "…") + " … " + (p.max ?? "…") + " " + p.unit : "", p.help].filter(Boolean).join(" · ")));
+    let ctl;
+    if (!p.writable) ctl = h("div", { class: "ro" }, p.text);
+    else if (Object.keys(p.choices).length) {
+      ctl = h("select", { class: "in" }, Object.entries(p.choices).map(([k, t]) => h("option", { value: k }, t)));
+      ctl.value = String(p.value);
+    } else {
+      ctl = h("input", { class: "in", type: "text", inputmode: "decimal", value: p.value == null ? "" : String(p.value) });
+    }
+    if (p.writable) ctl.addEventListener("input", () => {
+      const val = ctl.value.trim();
+      if (val !== String(p.value) && val !== "") wanted[p.id] = val; else delete wanted[p.id];
+      row.classList.toggle("changed", p.id in wanted);
+    });
+    row.append(label, ctl); box.append(row);
+  }
+  const start = dry => {
+    if (!Object.keys(wanted).length) return toast("Ничего не изменено", "bad");
+    doAction("tune", { set: Object.assign({}, wanted), dry_run: dry || null });
+  };
+  card.append(box, h("div", { class: "row", style: "margin-top:1rem" },
+    h("button", { class: "btn", type: "button", onclick: () => start(true) }, "План без записи"),
+    h("button", { class: "btn primary", type: "button", onclick: () => start(false) }, "Записать…"),
+    h("button", { class: "btn ghost", type: "button", onclick: () => go({ action: "params" }) }, "Прочитать заново")));
+}
+
+/* =====================================================================
+   Самопроверка и «что помогло»
+   ===================================================================== */
+async function renderDoctor(v) {
+  const alive = liveCheck();
+  v.append(backBtn());
+  const card = h("section", { class: "card" }, h("div", { class: "row", style: "justify-content:space-between" }, h("h1", {}, "Самопроверка"),
+    h("button", { class: "btn small ghost", type: "button", onclick: () => openPage(w => renderArticle(w, "doctor")) }, "?")),
+    h("p", { class: "muted" }, "Сверяю копии, память, профили, навыки и Штурман…"));
+  v.append(card);
+  let r;
+  try { r = await api("/api/doctor?sim=" + (S.sim ? 1 : 0)); } catch (e) { card.lastChild.textContent = e.message; return; }
+  if (!alive()) return;
+  card.lastChild.remove();
+  const marks = { bad: "✖", warn: "⚠", info: "·" };
+  if (!r.items.length) card.append(h("div", { class: "msg h" }, "✔ Всё в порядке."));
+  for (const it of r.items) {
+    const msgs = h("div", {});
+    const fix = it.heal ? h("button", { class: "btn small primary", type: "button" }, "Исправить") : null;
+    if (fix) fix.addEventListener("click", async () => {
+      let word = null;
+      if (it.id.startsWith("file:")) {
+        word = await promptText("Слово подтверждения", "Вернуть рабочую версию файла из истории капота. Код и профили — только после слова «ДА».", "ДА");
+        if (word === null) return;
+      }
+      fix.disabled = true;
+      try {
+        const res = await api("/api/doctor/heal", { json: { id: it.id, sim: S.sim, word } });
+        msgs.textContent = ""; res.done.forEach(t => msgs.append(h("div", { class: "msg h" }, "✔ " + t)));
+        toast("Исправлено");
+      } catch (e) { msgs.textContent = ""; msgs.append(h("div", { class: "msg e" }, e.message)); fix.disabled = false; }
+    });
+    card.append(h("div", { style: "padding:.5rem 0;border-bottom:1px solid var(--line)" },
+      h("div", {}, h("span", { class: "lvl " + it.level }, marks[it.level] || "·"), h("b", {}, it.title)),
+      it.detail ? h("div", { class: "muted", style: "font-size:.88rem" }, it.detail) : null,
+      it.heal ? h("div", { class: "row", style: "margin-top:.3rem" }, h("small", { class: "muted", style: "flex:1" }, it.heal), fix) : null, msgs));
+  }
+  card.append(h("div", { class: "row", style: "margin-top:.8rem" }, h("button", { class: "btn small", type: "button", onclick: () => replacePage(renderDoctor) }, "Проверить ещё раз")));
+}
+
+async function fixModal(sid, fixId) {
+  if (sid == null) return;
+  try {
+    if (fixId != null) {
+      await api("/api/fix", { json: { session: sid, fix: fixId, sim: S.sim } });
+      return toast("Отмечено: подсказка помогла снова — она поднимется выше");
+    }
+    const text = await promptText("Что помогло?", "Одна фраза для следующего раза — например «переставил прищепку: вывод 1 был не там».", "");
+    if (!text) return;
+    await api("/api/fix", { json: { session: sid, text, sim: S.sim } });
+    toast("Записал — в следующий раз подскажу");
+  } catch (e) { toast(e.message, "bad"); }
+}
+
+/* =====================================================================
    Запуск
    ===================================================================== */
 async function boot() {
@@ -1163,6 +1668,8 @@ async function boot() {
   if (!emojiSupported()) document.body.classList.add("noemoji");
   for (const b of document.querySelectorAll(".tab")) b.addEventListener("click", () => showTab(b.dataset.tab));
   $("#mode").addEventListener("click", () => { setSim(!S.sim, true); render(); });
+  $("#helpBtn").addEventListener("click", () => openPage(v => renderHelp(v, "", S.tab)));
+  $("#hoodBtn").addEventListener("click", () => openPage(v => renderHood(v, S.tab)));
   for (;;) {
     try { S.hello = await api("/api/hello", { noLogin: true }); break; }
     catch (e) { $("#view").textContent = "Нет связи с прибором. Проверяю снова…"; await sleep(3000); }

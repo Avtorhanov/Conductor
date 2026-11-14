@@ -60,6 +60,14 @@ CREATE TABLE IF NOT EXISTS recipe_stats(
     fail INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY(profile_id, recipe_id)
 );
+CREATE TABLE IF NOT EXISTS fixes(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    signature TEXT NOT NULL,         -- «какая неудача»: итог | инструмент | текст ошибки
+    text TEXT NOT NULL,              -- что помогло (словами человека)
+    helped INTEGER NOT NULL DEFAULT 1,
+    session_id INTEGER,
+    ts TEXT
+);
 """
 
 SESSION_FIELDS = {"finished", "plugin", "target_class", "fingerprint",
@@ -158,3 +166,18 @@ class Memory:
         self._exec(f"INSERT INTO recipe_stats(profile_id, recipe_id, {col}) VALUES (?,?,1) "
                    f"ON CONFLICT(profile_id, recipe_id) DO UPDATE SET {col}={col}+1",
                    (profile_id, recipe_id))
+
+    # ---------- «что помогло» (обучение на неудачах) ----------
+    def add_fix(self, signature: str, text: str, sid: int | None) -> int:
+        return self._exec("INSERT INTO fixes(signature, text, helped, session_id, ts) VALUES (?,?,1,?,?)",
+                          (signature, text, sid, now())).lastrowid
+
+    def bump_fix(self, fix_id: int) -> None:
+        self._exec("UPDATE fixes SET helped=helped+1 WHERE id=?", (fix_id,))
+
+    def fixes(self, like: str):
+        """Подсказки, чья сигнатура начинается с like, — самые полезные первыми."""
+        return self.db.execute("SELECT * FROM fixes WHERE signature LIKE ? ESCAPE '\\' "
+                               "ORDER BY helped DESC, id DESC",
+                               (like.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%",)
+                               ).fetchall()

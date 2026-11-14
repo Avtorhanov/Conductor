@@ -3,6 +3,9 @@
   1 подготовка → 2 опознание → 3 напряжение → 4 копия «до» → 5 диагностика
   → 6 план ремонта → 7 подтверждение, запись, сверка, копия «после» → отзыв (обучение)
 
+Второй сценарий — «Настройка» (tune): изменить именованные параметры прибора по карте
+из профиля (core/params.py). Защита та же: копия «до», сверка, слово «ДА», копия «после».
+
 Ядро не знает ничего о конкретных чипах: «как подключиться» знают плагины,
 «что это и как лечить» — профили.
 """
@@ -15,10 +18,12 @@ from .checks import CHECKS, DEFAULT_CHECKS, CheckInput, diff_sectors, is_fill
 from .learning import Learning
 from .memory import Memory, now
 from .models import Finding, chip_key
+from .params import apply_changes, read_all as param_rows
 from .profiles import ProfileDB, to_int
 from .registry import load_plugins
 from .runner import Runner
 from .safety import Safety
+from .skills import SkillDB
 from .storage import BackupStore, sha256
 
 STEPS = 7
@@ -29,6 +34,12 @@ PREFLIGHT = [
     "чипа сверена с даташитом (чипам на 1.8 В нужен переходник).",
     "Прищепка стоит ровно: красный провод = вывод 1 (точка или скос на корпусе чипа).",
     "Запись будет только после резервной копии и вашего подтверждения.",
+]
+
+TUNE_PREFLIGHT = [
+    "Новые значения сверены с паспортом (руководством) прибора.",
+    "Прибор можно ненадолго отвлечь: на время записи он может перезапуститься или пересчитать настройки.",
+    "Запись будет только после копии текущих настроек и вашего подтверждения.",
 ]
 
 NOT_FOUND_HINTS = [
@@ -58,6 +69,11 @@ OUTCOMES = {
     "rolled_back": "откат выполнен",
     "rollback_failed": "откат не удался",
     "interrupted": "прервано",
+    "params_read": "параметры прочитаны",
+    "no_params": "у профиля нет карты параметров",
+    "no_change": "значения уже такие — запись не нужна",
+    "tuned": "параметры записаны и сверены",
+    "tune_failed": "параметры не записались (сверка не совпала)",
 }
 
 
@@ -73,11 +89,12 @@ class Conductor:
         self.memory = Memory(self.data_dir / "memory.sqlite", self.data_dir / "logs")
         mirror = Path(cfg["mirror_dir"]) / ("simulator" if sim else "") if cfg.get("mirror_dir") else None
         self.store = BackupStore(self.data_dir / "backups", mirror)
-        self.profiles = ProfileDB(cfg["profiles_dir"])
+        self.skills = SkillDB(cfg.get("skills_dir"))
+        self.profiles = ProfileDB(cfg["profiles_dir"], self.skills.profile_dirs())
         self.safety = Safety(cfg["safety"])
         self.learning = Learning(self)
         self.runner = Runner(self.log)
-        self.plugins, self.plugin_report = load_plugins(self, cfg, sim)
+        self.plugins, self.plugin_report = load_plugins(self, cfg, sim, self.skills.active)
         for path, err in self.profiles.errors:
             ui.warn(f"профиль {Path(path).name} пропущен: {err}")
 
@@ -168,6 +185,11 @@ class Conductor:
         return float(v) if v is not None else self.safety.programmer_voltage
 
     def _voltage_gate(self, profile, plugin=None) -> bool:
+        if plugin is not None and not getattr(plugin, "voltage_check", True):
+            note = plugin.voltage_note or "проверка напряжения логики для этого инструмента не нужна"
+            self.log(f"напряжение: не проверяется: {note}")
+            self.ui.ok(note)
+            return True
         pv = self.adapter_voltage(plugin)
         status, msg = self.safety.voltage_check(profile, pv)
         self.log(f"напряжение: {status}: {msg}")
@@ -569,6 +591,151 @@ class Conductor:
             return self._finish("cancelled")
         ok = self.apply(plugin, det, data_before, f"копия «до» из сеанса №{target_sid}")
         return self._finish("rolled_back" if ok else "rollback_failed")
+
+    # ================= параметры и настройка =================
+    def _params_target(self, first_step: int, total: int) -> tuple:
+        """Опознание и напряжение для «Параметров» и «Настройки».
+
+        Возвращает (плагин, опознание, None) или (None, None, итог остановки)."""
+        ui = self.ui
+        ui.step(first_step, total, "Опознание (только чтение идентификаторов)")
+        det = self.detect()
+        if det is None:
+            ui.error("ничего не опознано")
+            for hint in NOT_FOUND_HINTS:
+                ui.info("• " + hint)
+            return None, None, "not_detected"
+        self._record_detection(det)
+        plugin = self.plugin(det.plugin)
+        ui.ok(det.summary)
+        ui.info(f"инструмент: {plugin.title}")
+        if det.profile is None:
+            draft = self.learning.record_unknown(det)
+            ui.warn(f"профиля для такого устройства нет. Создан черновик: {draft}")
+        # карта может быть у профиля чипа или у профиля платы (узнаётся после чтения)
+        if not any(p.params for p in self.profiles.profiles if p.match_score(det) > 0):
+            ui.warn("для этого устройства нет карты параметров. Добавьте её: «Навыки» → «+» → "
+                    "«Карта параметров» (справка «Параметры прибора»)")
+            return None, None, "no_params"
+        if det.profile is not None:
+            ui.ok(f"профиль: {det.profile.name}")
+        ui.step(first_step + 1, total, "Совместимость по напряжению")
+        if not self._voltage_gate(det.profile, plugin):
+            return None, None, "blocked_voltage"
+        return plugin, det, None
+
+    def _refine_for_params(self, det, data: bytes, plugin) -> str | None:
+        """Уточнить профиль платы по содержимому. Возвращает итог остановки или None."""
+        board = self.profiles.refine(det, data)
+        if board is not None and board.id != det.profile.id:
+            previous = det.profile
+            det.profile, det.profile_score = board, 1.0
+            self.memory.update_session(self.session, profile_id=board.id)
+            self.ui.ok(f"по содержимому узнана плата: {board.name}")
+            if board.voltage != previous.voltage and not self._voltage_gate(board, plugin):
+                return "blocked_voltage"
+        if not det.profile.params:
+            self.ui.warn(f"у профиля «{det.profile.name}» нет карты параметров")
+            return "no_params"
+        return None
+
+    def show_params(self, profile, data: bytes) -> None:
+        for row in param_rows(data, profile.params):
+            self.ui.info(f"{row['title']}: {row['text']}" + ("" if row["writable"] else "  (только чтение)"))
+
+    def read_params(self) -> int:
+        """Прочитать параметры прибора и показать их. Только чтение."""
+        ui = self.ui
+        sid = self._start("params")
+        ui.header(f"Сеанс №{sid}: параметры прибора (только чтение)" + (" — симулятор" if self.sim else ""))
+        plugin, det, stop = self._params_target(1, 3)
+        if stop:
+            return self._finish(stop)
+        ui.step(3, 3, "Чтение параметров (копия с повторной сверкой)")
+        try:
+            data, sha, verified = self.backup(plugin, det, "before")
+        except Exception as e:
+            ui.error(f"не удалось прочитать: {e}")
+            self.log(f"ошибка чтения: {e}", "error")
+            return self._finish("read_failed")
+        stop = self._refine_for_params(det, data, plugin)
+        if stop:
+            return self._finish(stop)
+        self.show_params(det.profile, data)
+        if not verified:
+            ui.warn("повторные чтения не совпали — значения могут быть неточными, запись будет заблокирована")
+        return self._finish("params_read")
+
+    def tune(self, changes: dict) -> int:
+        """Изменить параметры прибора: копия «до» → план «было → стало» → «ДА» → запись и сверка."""
+        if not changes:
+            raise ValueError("не задано ни одного нового значения")
+        ui = self.ui
+        total = 6
+        sid = self._start("tune")
+        ui.header(f"Сеанс №{sid}: настройка параметров" + (" — ПРОБНЫЙ РЕЖИМ, запись отключена" if self.dry_run else "")
+                  + (" — симулятор" if self.sim else ""))
+        self.log("запрошены значения", data={"changes": {k: str(v) for k, v in changes.items()}})
+
+        ui.step(1, total, "Подготовка")
+        for line in TUNE_PREFLIGHT:
+            ui.info("• " + line)
+        ui.pause("Проверили? Нажмите Enter…")
+
+        plugin, det, stop = self._params_target(2, total)
+        if stop:
+            return self._finish(stop)
+
+        ui.step(4, total, "Копия текущих настроек «до» (чтение с повторной сверкой)")
+        try:
+            data, before_sha, verified = self.backup(plugin, det, "before")
+        except Exception as e:
+            ui.error(f"не удалось прочитать: {e}")
+            self.log(f"ошибка чтения: {e}", "error")
+            return self._finish("read_failed")
+        (ui.ok if verified else ui.warn)(f"копия сохранена: {before_sha[:12]}… ({len(data)} байт)"
+                                         + ("" if verified else " — НЕ подтверждена"))
+        stop = self._refine_for_params(det, data, plugin)
+        if stop:
+            return self._finish(stop)
+
+        ui.step(5, total, "План: что изменится")
+        image, lines, errors = apply_changes(data, det.profile.params, changes)
+        if errors:
+            for e in errors:
+                ui.error("• " + e)
+            self.log("значения отклонены: " + "; ".join(errors))
+            return self._finish("blocked")
+        if image == data:
+            ui.ok("на приборе уже эти значения — запись не нужна")
+            return self._finish("no_change")
+        for line in lines:
+            ui.info("• " + line)
+        blockers = self.safety.write_blockers(verified=verified, findings=[], profile=det.profile,
+                                              image=image, chip_size=len(data), dry_run=self.dry_run)
+        if blockers:
+            only_dry = self.dry_run and len(blockers) == 1
+            for b in blockers:
+                (ui.info if only_dry else ui.error)("• " + b)
+            self.log("запись не выполняется: " + "; ".join(blockers))
+            if only_dry:
+                ui.ok("пробный режим: план показан, ничего не записано.")
+                return self._finish("dry_run")
+            return self._finish("blocked")
+
+        ui.step(6, total, "Подтверждение, запись и сверка")
+        if not self.safety.confirm(ui, f"Записать в «{det.summary}»: " + "; ".join(lines)
+                                   + f". Копия «до» сохранена: {before_sha[:12]}…"):
+            ui.info("отменено, прибор не тронут")
+            return self._finish("cancelled")
+        self.log("изменения: " + "; ".join(lines))
+        if not self.apply(plugin, det, image, "параметры: " + ", ".join(changes)):
+            if ui.yes_no("Вернуть прежние настройки (копию «до»)?") == "yes":
+                self.apply(plugin, det, data, "копия «до» (возврат)")
+            return self._finish("tune_failed")
+        ui.ok("новые значения записаны и сверены")
+        self.show_params(det.profile, image)
+        return self._finish("tuned")
 
     def detect_only(self) -> int:
         self._start("detect")

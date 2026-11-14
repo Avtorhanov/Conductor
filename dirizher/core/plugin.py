@@ -18,6 +18,10 @@ class Plugin:
     title = "Базовый плагин"         # понятное человеку название
     target_class = "unknown"         # класс целей, например "memory.spi_nor"
     hardware = True                  # False — виртуальный (симулятор)
+    # Проверка «напряжение чипа = напряжение адаптера». False — для приборов, которые питаются
+    # сами и связаны развязанной шиной (RS-485, Ethernet): тогда ядро покажет voltage_note.
+    voltage_check = True
+    voltage_note = ""
 
     def __init__(self, conductor, settings: dict | None = None):
         self.c = conductor

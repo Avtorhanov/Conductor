@@ -18,6 +18,7 @@ from pathlib import Path
 
 import yaml
 
+from ..core.params import read_all as param_rows
 from ..core.pipeline import OUTCOMES, Conductor
 from ..core.ui import ConsoleUI
 
@@ -25,7 +26,10 @@ GUIDE_PATH = Path(__file__).with_name("guide.yaml")
 
 SIM_ACTIONS = ("status", "reset", "corrupt", "erase", "flaky", "steady")
 SNAPSHOT_KINDS = ("before", "after", "written")
-KIND_RU = {"run": "ремонт", "detect": "опознание", "rollback": "откат", "capture": "замер"}
+KIND_RU = {"run": "ремонт", "detect": "опознание", "rollback": "откат", "capture": "замер",
+           "params": "параметры", "tune": "настройка"}
+HOOD_AREAS = ("guide", "work", "log", "dev", "device", "help")
+SET_KEY = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
 SNAP_RU = {"before": "копия «до»", "after": "копия «после»", "written": "что записывали"}
 
 # Действия, которые Штурман умеет предлагать.
@@ -48,10 +52,21 @@ ACTIONS = {
     "profiles": {"job": False, "params": set(), "title": "Профили"},
     "roadmap": {"job": False, "params": set(), "title": "План развития"},
     "builder": {"job": False, "params": {"draft"}, "title": "Конструктор профиля"},
+    # 0.4.0 — мастерская
+    "params": {"job": True, "params": set(), "title": "Параметры прибора"},
+    "tune": {"job": True, "params": {"set", "dry_run"}, "title": "Настройка параметров"},
+    "tune_form": {"job": False, "params": {"session"}, "title": "Изменить параметры"},
+    "skills": {"job": False, "params": set(), "title": "Навыки"},
+    "help": {"job": False, "params": {"article"}, "title": "Справка"},
+    "hood": {"job": False, "params": {"area"}, "title": "Капот"},
+    "doctor": {"job": False, "params": set(), "title": "Самопроверка"},
+    "fix": {"job": False, "params": {"session", "fix"}, "title": "Что помогло"},
 }
 PICK_PURPOSES = ("rollback", "feedback", "reference", "export")
 LESSON_GROUPS = ("work", "dev")
 LEVELS = {"important": 0, "tip": 1, "info": 2}
+FAIL_OUTCOMES = ("not_detected", "read_failed", "blocked", "blocked_voltage", "no_action", "write_failed",
+                 "not_repaired", "rollback_failed", "tune_failed", "capture_failed")
 
 
 class GuideError(ValueError):
@@ -101,6 +116,12 @@ def _check_option(opt, where: str, g: dict, errors: list) -> None:
             errors.append(f"{where} «{opt['label']}»: image в Штурмане может быть только ask")
         if opt["action"] == "sim" and params.get("do") not in SIM_ACTIONS:
             errors.append(f"{where} «{opt['label']}»: do — одно из {', '.join(SIM_ACTIONS)}")
+        if "article" in params and not isinstance(params["article"], str):
+            errors.append(f"{where} «{opt['label']}»: article — имя статьи справки")
+        if params.get("area") not in (None, *HOOD_AREAS):
+            errors.append(f"{where} «{opt['label']}»: area — одно из {', '.join(HOOD_AREAS)}")
+        if "set" in params and not isinstance(params["set"], dict):
+            errors.append(f"{where} «{opt['label']}»: set — словарь «параметр: значение»")
 
 
 def validate(g) -> list:
@@ -231,6 +252,10 @@ def execute(c, action: str, params: dict | None = None):
             raise ValueError(f"неизвестная учебная команда «{do}»")
         c.ui.ok(getattr(c.plugin("simulator"), f"do_{do}")())
         return None
+    if action == "params":
+        return c.read_params()
+    if action == "tune":
+        return c.tune(clean_set(p.get("set")))
     if action == "capture":
         # Логический анализатор только принимает сигналы — в устройство ничего не пишется.
         if c.sim:
@@ -238,6 +263,22 @@ def execute(c, action: str, params: dict | None = None):
         from ..extras import sigrok
         return sigrok.scan(c) if p.get("scan") else sigrok.capture(c, c.cfg)
     raise ValueError(f"действие «{action}» не выполняется ядром")
+
+
+def clean_set(raw) -> dict:
+    """Новые значения параметров от человека: {id: число или текст}, не больше 64."""
+    if not isinstance(raw, dict) or not raw:
+        raise ValueError("не задано ни одного нового значения")
+    if len(raw) > 64:
+        raise ValueError("слишком много параметров за раз")
+    out = {}
+    for k, v in raw.items():
+        if not SET_KEY.match(str(k)):
+            raise ValueError(f"недопустимое имя параметра «{k}»")
+        if isinstance(v, bool) or not isinstance(v, (int, float, str)) or len(str(v)) > 32:
+            raise ValueError(f"«{k}»: значение — число")
+        out[str(k)] = v
+    return out
 
 
 def outcome_of(c, sid) -> str | None:
@@ -258,6 +299,8 @@ def job_title(action: str, params: dict, dry_run: bool = False) -> str:
         return f"Учебная микросхема: {p.get('do', '')}"
     if action == "capture":
         return "Поиск анализатора" if p.get("scan") else "Замер сигналов"
+    if action == "tune":
+        return "Настройка параметров" + (" (без записи)" if dry_run else "")
     title = ACTIONS.get(action, {}).get("title", action)
     if p.get("session"):
         title += f" · сеанс №{p['session']}"
@@ -300,7 +343,7 @@ def pickable(c, purpose: str, limit: int = 30) -> list:
     for s in c.memory.sessions(300):
         snaps = _snapshots(c, s["id"])
         if purpose == "rollback":
-            ok = "before" in snaps and s["kind"] in ("run", "rollback")
+            ok = "before" in snaps and s["kind"] in ("run", "rollback", "tune")
         elif purpose == "feedback":
             ok = bool(s["recipe_id"] and s["profile_id"])
         elif purpose == "reference":
@@ -329,12 +372,64 @@ def session_detail(c, sid: int) -> dict | None:
     kinds = {sn["kind"] for sn in snaps}
     if s["recipe_id"] and s["profile_id"]:
         actions.append({"label": "Сообщить, помог ли ремонт", "action": "feedback", "params": {"session": sid}})
-    if "before" in kinds and s["kind"] in ("run", "rollback"):
+    if "before" in kinds and s["kind"] in ("run", "rollback", "tune"):
         actions.append({"label": "Вернуть копию «до» на чип", "action": "rollback", "params": {"session": sid}})
+    prof = c.profiles.get(s["profile_id"]) if s["profile_id"] else None
+    if prof is not None and prof.params and kinds & {"before", "after"}:
+        actions.append({"label": "Изменить параметры", "action": "tune_form", "params": {"session": sid}})
+    if c.learning.signature(sid):
+        actions.append({"label": "Записать, что помогло", "action": "fix", "params": {"session": sid}})
     if s["profile_id"] and any(sn["verified"] for sn in snaps if sn["kind"] != "written"):
         actions.append({"label": "Сделать эталоном", "action": "reference",
                         "params": {"session": sid, "label": "ask"}})
     return {"session": info, "snapshots": snaps, "events": events, "actions": actions}
+
+
+def params_view(c, sid: int | None = None) -> dict | None:
+    """Значения параметров из последнего снимка сеанса (или самого свежего подходящего сеанса)."""
+    for s in c.memory.sessions(300):
+        if sid is not None and s["id"] != sid:
+            continue
+        prof = c.profiles.get(s["profile_id"]) if s["profile_id"] else None
+        if prof is None or not prof.params:
+            if sid is not None:
+                return None
+            continue
+        after = c.memory.snapshot(s["id"], "after")
+        snap = after if after is not None and after["verified"] else c.memory.snapshot(s["id"], "before")
+        if snap is None:
+            if sid is not None:
+                return None
+            continue
+        return {"session": s["id"], "profile": prof.id, "profile_name": prof.name, "ts": _fmt_time(snap["ts"]),
+                "verified": bool(snap["verified"]), "snapshot": snap["kind"],
+                "params": param_rows(c.store.get(snap["sha"]), prof.params)}
+    return None
+
+
+def skills_info(c) -> dict:
+    """Навыки для вкладки «Навыки»: что загружено, что сломано, что даёт каждый."""
+    from ..core.registry import discover
+    found, _ = discover(c.skills.active)
+    items = []
+    for sk in c.skills.skills:
+        plugins = [r for r in c.plugin_report if r.get("skill") == sk.id]
+        errors = list(sk.errors) + [r["status"] for r in c.plugin_report
+                                    if r["title"] == "ошибка загрузки" and r["name"] == f"навык {sk.id}"]
+        root = Path(c.cfg.get("_path") or "config.yaml").resolve().parent
+        try:
+            rel = sk.path.resolve().relative_to(root).as_posix()
+        except ValueError:
+            rel = str(sk.path)
+        items.append({"id": sk.id, "title": sk.title, "kind": sk.kind, "summary": sk.summary,
+                      "enabled": sk.enabled, "path": rel, "plugins": plugins, "errors": errors,
+                      "warnings": list(dict.fromkeys(sk.warnings)),
+                      "profiles": [p.id for p in c.profiles.profiles
+                                   if Path(p.path).resolve().is_relative_to(sk.path.resolve())],
+                      "help": f"skill.{sk.id}" if (sk.path / "help.md").is_file() else None})
+    broken = [{"path": Path(folder).name, "error": err} for folder, err in c.skills.errors]
+    classes = sorted({cls.target_class for cls, _ in found.values() if cls.hardware})
+    return {"items": items, "broken": broken, "classes": classes}
 
 
 # ======================= прибор =======================
@@ -462,8 +557,27 @@ def suggest(c, limit: int = 6) -> list:
                           action="builder", params={"draft": d["file"]}))
 
     for path, err in c.profiles.errors[:2]:
-        items.append(_opt(f"Профиль {Path(path).name} не загружен", "important", err,
-                          lesson="dev_chip_profile"))
+        items.append(_opt(f"Профиль {Path(path).name} не загружен", "important", err, action="doctor"))
+
+    broken = [r for r in c.plugin_report if r["title"] == "ошибка загрузки"]
+    broken += [{"name": f"навык {Path(f).name}", "status": e} for f, e in c.skills.errors]
+    for r in broken[:2]:
+        items.append(_opt(f"{r['name'].capitalize()} не загружается", "important",
+                          f"{r['status'][:160]} — самопроверка вернёт рабочую версию", action="doctor"))
+
+    # обучение на неудачах: после неудачи следующий такой же сеанс прошёл — что помогло?
+    known = {r["session_id"] for r in c.memory.db.execute("SELECT session_id FROM fixes")}
+    good = {"detected", "healthy", "repaired", "rolled_back", "params_read", "tuned", "dry_run",
+            "written_verified", "captured", "already_same", "no_change"}
+    for i, s in enumerate(sessions[1:12], 1):
+        if s["id"] in known or s["outcome"] not in c.learning.FAIL_OUTCOMES or s["outcome"] == "interrupted":
+            continue
+        later = [x for x in sessions[:i] if x["outcome"] in good and (x["plugin"] == s["plugin"] or not s["plugin"])]
+        if later:
+            items.append(_opt(f"Сеанс №{s['id']} не удался, а №{later[-1]['id']} прошёл — что помогло?", "tip",
+                              "одна фраза — в следующий раз Дирижёр подскажет это первым",
+                              action="fix", params={"session": s["id"]}))
+            break
 
     if not c.sim:
         hardware_ready = any(p.hardware for p in c.plugins)
@@ -494,10 +608,12 @@ def suggest(c, limit: int = 6) -> list:
 
 
 # ======================= что дальше =======================
-def after(action: str, params: dict | None, outcome: str | None, sid, sim: bool = False) -> list:
+def after(action: str, params: dict | None, outcome: str | None, sid, sim: bool = False,
+          hints: list | None = None) -> list:
     """Варианты после завершения действия — чтобы человек не гадал, что делать дальше.
 
-    В учебном режиме добавляется следующая учебная поломка — чтобы пройти весь цикл."""
+    В учебном режиме добавляется следующая учебная поломка — чтобы пройти весь цикл.
+    hints — что помогало раньше при такой же неудаче (Learning.hints): показываются первыми."""
     p = {k: v for k, v in (params or {}).items() if v is not None}
     same = {"action": action, "params": p}
     if action == "sim":
@@ -557,7 +673,23 @@ def after(action: str, params: dict | None, outcome: str | None, sid, sim: bool 
         "rolled_back": [journal, _opt("К началу", next="home")],
         "rollback_failed": [_opt("Почему не удалось", lesson="unstable_read"), retry],
         "interrupted": [retry, journal],
+        "params_read": [_opt("Изменить параметры", "important", "копия «до», план, запись после «ДА»",
+                             action="tune_form", params={"session": sid}), journal],
+        "no_params": [_opt("Добавить карту параметров", "important", "Навыки → + → Карта параметров",
+                           action="skills"),
+                      _opt("Как устроена карта", action="help", params={"article": "params"})],
+        "no_change": [_opt("Изменить другие параметры", action="tune_form", params={"session": sid})],
+        "tuned": [_opt("Прочитать ещё раз", action="params"),
+                  _opt("Вернуть прежние настройки", action="rollback", params={"session": sid})],
+        "tune_failed": [_opt("Вернуть прежние настройки", "important", action="rollback",
+                             params={"session": sid}),
+                        _opt("Почему сверка не совпала", action="help", params={"article": "params"})],
     }
+    if action == "tune" and outcome == "dry_run":
+        table["dry_run"][0] = _opt("Выполнить по-настоящему", "important", "запись только после слова «ДА»",
+                                   action="tune", params=real)
+    if action == "tune" and outcome in ("blocked", "cancelled"):
+        table[outcome] = [_opt("Изменить значения", action="tune_form", params={"session": sid}), journal]
     options = [o for o in table.get(outcome, [journal]) if o]
     if sim:
         drill = {
@@ -568,4 +700,10 @@ def after(action: str, params: dict | None, outcome: str | None, sid, sim: bool 
         }.get(outcome)
         if drill:
             options.insert(0, drill)
+    if outcome in FAIL_OUTCOMES:
+        learned = [_opt(f"Раньше помогало: {h['text']}", "important",
+                        f"подтверждено {h['helped']} раз(а) — нажмите, если помогло и сейчас",
+                        action="fix", params={"session": sid, "fix": h["id"]}) for h in (hints or [])]
+        options = learned + options + ([_opt("Записать, что помогло", "info", "одна фраза — для следующего раза",
+                                             action="fix", params={"session": sid})] if sid else [])
     return options

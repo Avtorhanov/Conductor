@@ -7,6 +7,10 @@
   * профиль чипа — узнаётся по отпечатку (например, JEDEC ID) ещё до чтения;
   * профиль платы — уточняет профиль чипа по содержимому дампа (content_match)
     и знает уникальные области платы (preserve), которые нельзя затирать.
+
+Необязательно: params — карта параметров (core/params.py) для сценария «Настройка»;
+bus — настройки шины для лезвия (например, окно регистров Modbus: start, count).
+Профили навыков (skills/<id>/profiles/) загружаются вместе с основными.
 """
 from __future__ import annotations
 
@@ -14,6 +18,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
+
+from .params import normalize as normalize_params
 
 KNOWN_ACTIONS = {"write_reference", "write_image"}
 
@@ -39,6 +45,8 @@ class Profile:
     recipes: list = field(default_factory=list)
     preserve: list = field(default_factory=list)
     notes: str = ""
+    params: list = field(default_factory=list)
+    bus: dict = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, d: dict, path: Path) -> "Profile":
@@ -59,6 +67,14 @@ class Profile:
             to_int(reg["offset"]), to_int(reg["length"])      # проверка формата
         for sig in d.get("content_match") or []:
             to_int(sig["offset"]), bytes.fromhex(sig["hex"])
+        bus = d.get("bus") or {}
+        if not isinstance(bus, dict):
+            raise ValueError("bus — словарь настроек шины")
+        params = normalize_params(d.get("params"), bus)
+        size = to_int(d["size"]) if d.get("size") is not None else None
+        for p in params:
+            if size and p["offset"] + p["size"] > size:
+                raise ValueError(f"параметр «{p['id']}» выходит за размер {size} байт")
         return cls(
             id=str(d["id"]), name=str(d["name"]), target_class=str(d["class"]), path=path,
             match=d.get("match") or {}, content_match=d.get("content_match") or [],
@@ -68,6 +84,7 @@ class Profile:
             allow_write=bool(d.get("allow_write", True)),
             checks=d.get("checks") or [], recipes=recipes,
             preserve=d.get("preserve") or [], notes=d.get("notes") or "",
+            params=params, bus=bus,
         )
 
     @property
@@ -108,19 +125,25 @@ class Profile:
 
 
 class ProfileDB:
-    def __init__(self, root: Path):
+    def __init__(self, root: Path, extra_roots=()):
         self.root = Path(root)
+        self.extra_roots = [Path(r) for r in extra_roots]     # профили навыков
         self.profiles: list = []
         self.errors: list = []
         self.reload()
+
+    def files(self) -> list:
+        out = sorted(self.root.rglob("*.yaml")) if self.root.exists() else []
+        for extra in self.extra_roots:
+            out += sorted(extra.rglob("*.yaml"))
+        return out
 
     def reload(self) -> None:
         self.profiles, self.errors = [], []
         if not self.root.exists():
             self.errors.append((self.root, "папка профилей не найдена"))
-            return
         seen = {}
-        for path in sorted(self.root.rglob("*.yaml")):
+        for path in self.files():
             if path.name.startswith("_"):
                 continue
             try:

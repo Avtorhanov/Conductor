@@ -134,6 +134,18 @@ class Wizard:
             return self.roadmap()
         if name == "builder":
             return self.builder(params.get("draft"))
+        if name == "skills":
+            return self.skills()
+        if name == "help":
+            return self.help(params.get("article"))
+        if name == "hood":
+            return self.hood()
+        if name == "doctor":
+            return self.doctor()
+        if name == "tune_form":
+            return self.tune_form(params.get("session"))
+        if name == "fix":
+            return self.fix(params.get("session"), params.get("fix"))
         meta = guide.ACTIONS[name]
         if meta.get("pick") and "session" not in params:
             sid = self.pick(meta["pick"])
@@ -153,9 +165,11 @@ class Wizard:
         dry_run = bool(params.get("dry_run"))
         c = Conductor(self.cfg, ui, sim=sim, dry_run=dry_run)
         sid = outcome = None
+        hints = []
         try:
             sid = guide.execute(c, name, params)
             outcome = guide.outcome_of(c, sid)
+            hints = c.learning.hints(sid) if sid else []
         except KeyboardInterrupt:
             c.interrupted()
             ui.warn("прервано. Все сделанные копии сохранены.")
@@ -165,7 +179,101 @@ class Wizard:
             return None
         finally:
             c.close()
-        return self.then(guide.after(name, params, outcome, sid, sim))
+        return self.then(guide.after(name, params, outcome, sid, sim, hints))
+
+    # ---------- мастерская ----------
+    def skills(self):
+        with guide.open_readonly(self.cfg, self.sim) as c:
+            info = guide.skills_info(c)
+        self.ui.header("Навыки")
+        for sk in info["items"]:
+            self.ui.out(f" {'✖' if sk['errors'] else '✔'} {sk['title']} ({sk['id']}, {sk['kind']}) — {sk['path']}")
+            for pl in sk["plugins"]:
+                self.ui.info(f"лезвие {pl['name']}: {pl['status']}")
+            for e in sk["errors"]:
+                self.ui.error(e)
+        for b in info["broken"]:
+            self.ui.error(f"{b['path']}: {b['error']}")
+        self.ui.info("новый навык и правка кода — в браузере («Навыки» → «+», кнопка </>); "
+                     "в терминале — редактором, затем python3 -m dirizher doctor")
+        return self.then([{"label": "Справка: навыки", "action": "help", "params": {"article": "skills"}},
+                          {"label": "Самопроверка", "action": "doctor"}], "Дальше (Enter — назад):")
+
+    def help(self, article: str | None = None):
+        from ..workshop import helpdocs
+        if article:
+            art = helpdocs.article(self.cfg, article)
+            if art is None:
+                self.ui.warn(f"статьи «{article}» нет")
+                return None
+            self.ui.header(art["title"])
+            for line in art["text"].rstrip().splitlines():
+                self.ui.out("   " + line)
+            self.ui.pause("Enter — назад…")
+            return None
+        items = [i for i in helpdocs.search(helpdocs.articles(self.cfg, with_lessons=False))]
+        idx = self.ui.choose("Справка (Enter — назад)", [i["title"] for i in items])
+        return None if idx is None else self.help(items[idx]["id"])
+
+    def hood(self):
+        self.ui.info("капот (правка кода с проверкой и историей) — в браузере: python3 -m dirizher web, кнопка </>")
+        return self.help("hood")
+
+    def doctor(self):
+        from ..workshop import doctor
+        result = doctor.main(self.cfg, sim=self.sim)
+        issues = [i for i in doctor.check(self.cfg, self.sim) if i["heal"]]
+        if issues and self.ui.yes_no(f"Исправить исправимое ({len(issues)})?") == "yes":
+            doctor.main(self.cfg, sim=self.sim, do_heal=True)
+        elif not issues and result == 0:
+            self.ui.ok("исправлять нечего")
+        return None
+
+    def tune_form(self, sid=None):
+        ui = self.ui
+        with guide.open_readonly(self.cfg, self.sim) as c:
+            view = guide.params_view(c, int(sid) if sid else None)
+        if view is None:
+            ui.warn("сначала прочитайте параметры")
+            return {"label": "Прочитать параметры", "action": "params"}
+        ui.header(f"{view['profile_name']} — по сеансу №{view['session']} ({view['ts']})")
+        changes = {}
+        for row in view["params"]:
+            if not row["writable"]:
+                ui.info(f"{row['title']}: {row['text']} (только чтение)")
+                continue
+            limits = ""
+            if row["choices"]:
+                limits = "; ".join(f"{k} — {v}" for k, v in row["choices"].items())
+            elif row["min"] is not None or row["max"] is not None:
+                limits = f"{row['min']} … {row['max']} {row['unit']}".strip()
+            value = self.ask_text(f"   {row['title']} = {row['text']}" + (f" [{limits}]" if limits else "")
+                                  + " — новое (Enter — оставить): ")
+            if value:
+                changes[row["id"]] = value
+        if not changes:
+            ui.info("ничего не меняем")
+            return None
+        return {"label": "Записать", "action": "tune", "params": {"set": changes}}
+
+    def fix(self, sid, fix_id=None):
+        if sid is None:
+            return None
+        with guide.open_readonly(self.cfg, self.sim) as c:
+            if fix_id is not None:
+                c.learning.confirm_fix(int(fix_id), int(sid))
+                self.ui.ok("отмечено: подсказка помогла снова — она поднимется выше")
+                return None
+            text = self.ask_text(f"   Что помогло после сеанса №{sid}? (одна фраза, Enter — отмена): ")
+            if not text:
+                return None
+            try:
+                c.learning.remember_fix(int(sid), text)
+            except ValueError as e:
+                self.ui.error(str(e))
+                return None
+        self.ui.ok("записал — в следующий раз подскажу")
+        return None
 
     def pick(self, purpose: str):
         with guide.open_readonly(self.cfg, self.sim) as c:

@@ -10,6 +10,8 @@ DEFAULTS = {
     "data_dir": "./data",
     "mirror_dir": "",
     "profiles_dir": "./profiles",
+    "skills_dir": "./skills",
+    "help_dir": "./help",
     "safety": {
         "programmer_voltage": 3.3,
         "voltage_tolerance": 0.3,
@@ -36,7 +38,7 @@ def load_config(path: Path) -> dict:
         with open(path, encoding="utf-8") as f:
             _merge(cfg, yaml.safe_load(f) or {})
     base = path.parent
-    for key in ("data_dir", "mirror_dir", "profiles_dir"):
+    for key in ("data_dir", "mirror_dir", "profiles_dir", "skills_dir", "help_dir"):
         value = cfg.get(key)
         if value:
             p = Path(str(value)).expanduser()

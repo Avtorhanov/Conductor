@@ -11,7 +11,10 @@
     которое человек вводит сам. Слово проверяет сервер, кнопкой его не заменить;
   * телефон и ПК входят по коду; экран самого прибора (localhost) — без кода;
   * кнопка «Отмена» отвечает ядру так же, как пустой ответ в консоли, —
-    безопасным вариантом («нет», «позже», «отмена»).
+    безопасным вариантом («нет», «позже», «отмена»);
+  * мастерская (0.4.0): справка, навыки, самопроверка, капот. Капот правит файлы прибора, поэтому
+    закрыт по умолчанию: hood.edit: true в config.yaml или «Открыть капот» с экрана самого прибора
+    (с телефона открыть нельзя). Код и профили сохраняются только после слова «ДА».
 """
 from __future__ import annotations
 
@@ -32,6 +35,8 @@ from .. import __version__
 from ..core.pipeline import OUTCOMES, Conductor
 from ..core.storage import sha256
 from ..core.ui import ConsoleUI
+from ..workshop import doctor, helpdocs, skillmaker
+from ..workshop.hood import Hood, HoodError, classify
 from . import builder, guide
 
 STATIC = Path(__file__).with_name("static")
@@ -257,6 +262,9 @@ class App:
         self.max_upload = int(float(self.settings.get("max_upload_mb", 64)) * 1024 * 1024)
         self.images_dir = Path(cfg["data_dir"]) / "images"
         self.lock = threading.Lock()
+        self.hood = Hood(cfg)
+        self.hood_permanent = bool((cfg.get("hood") or {}).get("edit", False))
+        self.hood_unlocked = False
         self.job: Job | None = None
         self.fails = 0
         self.locked_until = 0.0
@@ -276,6 +284,13 @@ class App:
         if hostname:
             urls.append(f"http://{hostname}.local:{self.port}")
         return urls or [f"http://localhost:{self.port}"]
+
+    @property
+    def hood_open(self) -> bool:
+        return self.hood_permanent or self.hood_unlocked
+
+    def busy(self) -> bool:
+        return self.job is not None and not self.job.done
 
     # ---------- образы прошивок ----------
     def image_path(self, name) -> Path:
@@ -359,12 +374,16 @@ class App:
             elif key == "image":
                 self.image_path(v)
                 p[key] = str(v)
+            elif key == "set":
+                p[key] = guide.clean_set(v)
         if meta.get("pick") and "session" not in p:
             raise ValueError("не выбран сеанс")
         if action == "sim" and "do" not in p:
             raise ValueError("не выбрана учебная команда")
         if raw.get("image") == "ask":
             raise ValueError("не выбран файл образа")
+        if action == "tune" and "set" not in p:
+            raise ValueError("не задано ни одного нового значения")
         return p
 
     def start_job(self, action: str, raw_params, sim: bool) -> Job:
@@ -384,6 +403,7 @@ class App:
     def _worker(self, job: Job, action: str, params: dict, sim: bool, dry_run: bool) -> None:
         ui = WebUI(job)
         c = None
+        hints = []
         exec_params = dict(params)
         try:
             if "image" in exec_params:
@@ -391,6 +411,8 @@ class App:
             c = Conductor(self.cfg, ui, sim=sim, dry_run=dry_run)
             sid = guide.execute(c, action, exec_params)
             outcome = guide.outcome_of(c, sid)
+            if sid:
+                hints = c.learning.hints(sid)
         except Interrupted:
             if c is not None:
                 c.interrupted()
@@ -409,7 +431,7 @@ class App:
         if job.result is None:
             job.result = {"session": sid, "outcome": outcome,
                           "outcome_text": OUTCOMES.get(outcome, outcome) if outcome else "готово"}
-        job.next = guide.after(action, dict(params, dry_run=dry_run), outcome, sid, sim)
+        job.next = guide.after(action, dict(params, dry_run=dry_run), outcome, sid, sim, hints)
         job.finish()
 
     def shutdown(self) -> None:
@@ -519,7 +541,7 @@ class Handler(BaseHTTPRequestHandler):
             return fn(self, q)
         except Busy as e:
             return self.fail(409, str(e))
-        except (ValueError, KeyError, TypeError, guide.GuideError, builder.BuilderError) as e:
+        except (ValueError, KeyError, TypeError, guide.GuideError, builder.BuilderError, HoodError) as e:
             return self.fail(400, str(e).strip("'\""))
         except (BrokenPipeError, ConnectionResetError):
             return None
@@ -609,6 +631,7 @@ def api_device(h: Handler, q):
         info = guide.device_info(c)
     info["connect"] = h.connect_info()
     info["version"] = __version__
+    info["hood"] = hood_state(h)
     h.send_json(info)
 
 
@@ -722,6 +745,170 @@ def api_builder_enable(h: Handler, q):
     h.send_json({"ok": True, "path": str(path), "file": path.name})
 
 
+# ======================= мастерская: параметры, обучение =======================
+@route("GET", "/api/params")
+def api_params(h: Handler, q):
+    sid = int(q["session"]) if q.get("session") else None
+    with h.app.conductor(_sim(q)) as c:
+        view = guide.params_view(c, sid)
+    if view is None:
+        return h.fail(404, "нет прочитанных параметров — сначала «Прочитать параметры»")
+    h.send_json(view)
+
+
+@route("GET", "/api/fixes")
+def api_fixes(h: Handler, q):
+    sid = int(q["session"])
+    with h.app.conductor(_sim(q)) as c:
+        h.send_json({"session": sid, "signature": c.learning.signature(sid), "hints": c.learning.hints(sid, 5)})
+
+
+@route("POST", "/api/fix")
+def api_fix(h: Handler, q):
+    body = h.read_json()
+    sid = int(body["session"])
+    with h.app.conductor(bool(body.get("sim"))) as c:
+        if body.get("fix") is not None:
+            c.learning.confirm_fix(int(body["fix"]), sid)
+            return h.send_json({"ok": True})
+        fid = c.learning.remember_fix(sid, str(body.get("text") or ""))
+    h.send_json({"ok": True, "id": fid})
+
+
+# ======================= мастерская: навыки и справка =======================
+@route("GET", "/api/skills")
+def api_skills(h: Handler, q):
+    with h.app.conductor(_sim(q)) as c:
+        info = guide.skills_info(c)
+    info["kinds"] = [{"id": k, "title": v} for k, v in skillmaker.KINDS.items()]
+    info["hood"] = hood_state(h)
+    h.send_json(info)
+
+
+@route("POST", "/api/skills/new")
+def api_skills_new(h: Handler, q):
+    need_hood(h)
+    body = h.read_json()
+    res = skillmaker.create_skill(h.app.hood, str(body.get("kind")), str(body.get("id") or "").strip(),
+                                  str(body.get("title") or ""), str(body.get("target_class") or "device.modbus"),
+                                  actor=actor(h))
+    h.send_json(dict(res, ok=True))
+
+
+@route("GET", "/api/help")
+def api_help(h: Handler, q):
+    items = helpdocs.search(helpdocs.articles(h.app.cfg), q.get("q", "")[:100], q.get("section", ""))
+    h.send_json({"items": items[:80], "hood": hood_state(h)})
+
+
+@route("GET", "/api/help/article")
+def api_help_article(h: Handler, q):
+    art = helpdocs.article(h.app.cfg, q.get("id", ""))
+    if art is None:
+        return h.fail(404, "нет такой статьи")
+    art["editable"] = bool(art["path"]) and classify(art["path"])[0] == "edit"
+    h.send_json(art)
+
+
+@route("POST", "/api/help/new")
+def api_help_new(h: Handler, q):
+    need_hood(h)
+    body = h.read_json()
+    rel = skillmaker.create_article(h.app.hood, str(body.get("id") or "").strip(), str(body.get("title") or ""),
+                                    str(body.get("section") or "dev"), actor=actor(h))
+    h.send_json({"ok": True, "open": rel, "id": Path(rel).stem})
+
+
+# ======================= мастерская: самопроверка =======================
+@route("GET", "/api/doctor")
+def api_doctor(h: Handler, q):
+    h.send_json({"items": doctor.check(h.app.cfg, _sim(q), deep=True, hood=h.app.hood), "hood": hood_state(h)})
+
+
+@route("POST", "/api/doctor/heal")
+def api_doctor_heal(h: Handler, q):
+    if h.app.busy():
+        raise Busy("идёт задание — самоисцеление после его окончания")
+    body = h.read_json()
+    iid = str(body.get("id") or "")
+    if iid.startswith("file:"):
+        need_hood(h)
+    done = doctor.heal(h.app.cfg, iid, bool(body.get("sim")), hood=h.app.hood, word=body.get("word"))
+    h.send_json({"ok": True, "done": done})
+
+
+# ======================= мастерская: капот =======================
+def hood_state(h: Handler) -> dict:
+    return {"open": h.app.hood_open, "permanent": h.app.hood_permanent, "local": h.is_local(),
+            "word": h.app.hood.word}
+
+
+def need_hood(h: Handler) -> None:
+    if not h.app.hood_open:
+        raise HoodError("капот закрыт: откройте его на экране самого прибора («Прибор» → «Открыть капот») "
+                        "или hood.edit: true в config.yaml")
+
+
+def actor(h: Handler) -> str:
+    return "экран прибора" if h.is_local() else f"сеть {h.client_address[0]}"
+
+
+@route("GET", "/api/hood")
+def api_hood(h: Handler, q):
+    area = q.get("area") or "dev"
+    h.send_json(dict(hood_state(h), area=area, areas=h.app.hood.areas(), files=h.app.hood.files(area)))
+
+
+@route("POST", "/api/hood/unlock")
+def api_hood_unlock(h: Handler, q):
+    if not h.is_local():
+        return h.fail(403, "открыть капот можно только с экрана самого прибора")
+    h.app.hood_unlocked = bool(h.read_json().get("open", True))
+    h.send_json(hood_state(h))
+
+
+@route("GET", "/api/hood/file")
+def api_hood_file(h: Handler, q):
+    data = h.app.hood.read(q.get("path", ""))
+    data["open"] = h.app.hood_open
+    h.send_json(data)
+
+
+@route("POST", "/api/hood/check")
+def api_hood_check(h: Handler, q):
+    body = h.read_json()
+    h.send_json(h.app.hood.check(str(body.get("path") or ""), body.get("text")))
+
+
+@route("POST", "/api/hood/save")
+def api_hood_save(h: Handler, q):
+    need_hood(h)
+    body = h.read_json()
+    h.send_json(h.app.hood.save(str(body.get("path") or ""), body.get("text"), body.get("word"), actor(h)))
+
+
+@route("GET", "/api/hood/history")
+def api_hood_history(h: Handler, q):
+    rel = q.get("path", "")
+    h.app.hood.path(rel, must_exist=False)
+    h.send_json({"path": rel, "items": h.app.hood.history(rel)})
+
+
+@route("GET", "/api/hood/version")
+def api_hood_version(h: Handler, q):
+    rel = q.get("path", "")
+    h.app.hood.path(rel, must_exist=False)
+    h.send_json({"path": rel, "v": q.get("v"), "text": h.app.hood.version(rel, q.get("v", ""))})
+
+
+@route("POST", "/api/hood/restore")
+def api_hood_restore(h: Handler, q):
+    need_hood(h)
+    body = h.read_json()
+    h.send_json(h.app.hood.restore(str(body.get("path") or ""), str(body.get("v") or ""), body.get("word"),
+                                   actor(h)))
+
+
 # ======================= запуск =======================
 def make_server(app: App, host: str, port: int) -> ThreadingHTTPServer:
     httpd = ThreadingHTTPServer((host, port), Handler)
@@ -749,6 +936,12 @@ def serve(cfg: dict, host: str | None = None, port: int | None = None, sim: bool
         print(f"   код доступа:    {app.pin}")
     else:
         print("   доступ только с этого устройства (web.host: 127.0.0.1)")
+    print(f"   капот:          {'открыт (hood.edit: true)' if app.hood_open else 'закрыт — открыть на экране прибора'}")
+    try:
+        found = [i for i in doctor.check(cfg, sim, deep=False, hood=app.hood) if i["level"] == "bad"]
+        print("   самопроверка:   " + (f"проблем: {len(found)} — «Прибор» → «Самопроверка»" if found else "в порядке"))
+    except Exception as e:                       # самопроверка не должна мешать запуску
+        print(f"   самопроверка:   не выполнилась: {e}")
     print("   остановить:     Ctrl+C\n", flush=True)
     try:
         httpd.serve_forever()

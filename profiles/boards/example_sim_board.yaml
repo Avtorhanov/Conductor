@@ -20,6 +20,27 @@ preserve:                       # уникальное для каждой пл�
     length: 0x1000
     why: MAC-адрес и серийный номер платы
 
+# Карта параметров (учебная): что можно прочитать и изменить сценарием «Настройка».
+params:
+  - id: fw_format
+    title: Версия формата прошивки
+    offset: 0x4
+    type: u16le
+    writable: false
+  - id: boot_delay
+    title: Задержка загрузки
+    offset: 0x7FE000
+    type: u8
+    unit: с
+    min: 0
+    max: 30
+    help: Учебный параметр. 255 — не задано (стёртая память).
+  - id: region
+    title: Регион радио
+    offset: 0x7FE001
+    type: u8
+    choices: {0: EU, 1: US, 2: JP, 255: "не задан"}
+
 checks:
   - stable_read
   - not_zero

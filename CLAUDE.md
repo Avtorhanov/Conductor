@@ -10,7 +10,8 @@
 ## Команды
 - Тесты: `python3 -m unittest -v`. Они должны проходить до любого коммита.
 - Учебный режим без железа: `python3 -m dirizher sim reset` и `python3 -m dirizher --sim run`.
-- Список плагинов и профилей: `python3 -m dirizher plugins`, `python3 -m dirizher profiles`.
+- Список плагинов, профилей и навыков: `python3 -m dirizher plugins`, `profiles`, `skills`.
+- Самопроверка: `python3 -m dirizher doctor [--heal]`. Справка: `python3 -m dirizher help [слово]`.
 - Интерфейсы: `python3 -m dirizher web` (браузер: ПК, телефон, экран прибора), `python3 -m dirizher` (мастер в терминале).
 
 ## Карта кода
@@ -20,6 +21,9 @@
 - `dirizher/core/checks.py` — проверки (`@register`). `core/safety.py` — условия записи.
 - `core/storage.py` — копии по SHA-256. `core/memory.py` — SQLite. `core/learning.py` — обучение.
 - `core/ui.py` — весь ввод-вывод. `profiles/` — база знаний (YAML).
+- `dirizher/core/params.py` — карта параметров; `Conductor.read_params/tune` — сценарий «Настройка».
+- `dirizher/core/skills.py` — навыки `skills/<id>/` и сторож кода; образец навыка — `skills/modbus_rtu/`.
+- `dirizher/workshop/` — капот (`hood.py`), навыки из шаблонов, справка (`help/*.md`), самопроверка (`doctor.py`).
 - `dirizher/interface/` — слой поверх ядра: `guide.yaml` + `guide.py` (Штурман: вопросы, подсказки, уроки), `web.py` + `static/index.html` (браузер), `wizard.py` (терминал), `builder.py` (конструктор профиля). Ядро о нём не знает: интерфейс подставляет свой `ui`.
 
 ## Жёсткие правила
