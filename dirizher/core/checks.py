@@ -131,17 +131,48 @@ def compare_reference(ci: CheckInput) -> Finding:
                    ["restore_reference"])
 
 
+def _binwalk_scan(ci: CheckInput):
+    """Запустить binwalk (только сканирование, без распаковки) на копии дампа."""
+    with tempfile.TemporaryDirectory() as td:
+        path = Path(td) / "dump.bin"
+        path.write_bytes(ci.data)
+        return ci.conductor.runner.run(["binwalk", str(path)], timeout=int(ci.params.get("timeout", 300)))
+
+
 @register("binwalk")
 def binwalk(ci: CheckInput) -> Finding:
     """Необязательная проверка: что лежит внутри дампа (загрузчик, ядро, ФС...)."""
     if not shutil.which("binwalk"):
         return Finding("binwalk", "info", "binwalk не установлен — разбор структуры пропущен")
-    with tempfile.TemporaryDirectory() as td:
-        path = Path(td) / "dump.bin"
-        path.write_bytes(ci.data)
-        res = ci.conductor.runner.run(["binwalk", str(path)], timeout=300)
+    res = _binwalk_scan(ci)
     lines = [ln for ln in res.out.splitlines() if ln.strip()]
     if not res.ok or not lines:
         return Finding("binwalk", "info", "binwalk не нашёл знакомых структур")
     return Finding("binwalk", "info", "структура дампа (первые строки):\n      "
                    + "\n      ".join(lines[:12]))
+
+
+@register("binwalk_expect")
+def binwalk_expect(ci: CheckInput) -> Finding:
+    """Структура прошивки на месте: binwalk должен найти все ожидаемые сигнатуры.
+
+    В профиле:   - type: binwalk_expect
+                   expect: ["uImage header", "Squashfs filesystem"]   # подстроки, регистр не важен
+    Работает с binwalk 2.x и 3.x: ищутся подстроки во всём выводе. ПРОВЕРИТЬ НА ЖЕЛЕЗЕ:
+    точные названия сигнатур — по выводу binwalk на ИСПРАВНОМ дампе этой платы.
+    """
+    expect = [str(x) for x in (ci.params.get("expect") or [])]
+    if not expect:
+        return Finding("binwalk_expect", "warn", "в профиле не задан список expect — проверка пропущена")
+    if not shutil.which("binwalk"):
+        return Finding("binwalk_expect", "info", "binwalk не установлен — проверка структуры пропущена")
+    res = _binwalk_scan(ci)
+    if not res.ok:
+        return Finding("binwalk_expect", "warn", f"binwalk завершился с ошибкой: {res.tail(3)}")
+    text = res.out.lower()
+    missing = [e for e in expect if e.lower() not in text]
+    if not missing:
+        return Finding("binwalk_expect", "ok", "структура прошивки на месте: " + ", ".join(expect))
+    return Finding("binwalk_expect", "fail",
+                   "в дампе не найдено: " + ", ".join(missing) + " — прошивка, вероятно, повреждена",
+                   ["restore_reference", "restore_image"])

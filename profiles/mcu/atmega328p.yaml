@@ -1,0 +1,39 @@
+# ATmega328P (Arduino Uno/Nano и множество устройств). Узнаётся по подписи 1E950F.
+# Образ плагина avrdude: [flash 32 КБ][EEPROM 1 КБ] = 33792 байта
+# (настройки avrdude: memories: [flash, eeprom], flash_size: 32768, eeprom_size: 1024).
+
+id: atmega328p
+name: Microchip ATmega328P (32 КБ flash + 1 КБ EEPROM)
+class: mcu.avr
+match:
+  signature: "1E950F"
+priority: 10
+voltage: null          # чип работает от 1.8 до 5.5 В: подтвердите напряжение платы и адаптера
+size: 33792
+allow_write: true
+
+preserve:              # EEPROM — настройки и калибровки конкретного устройства
+  - offset: 0x8000
+    length: 0x400
+    why: EEPROM (настройки, калибровки, счётчики устройства)
+
+checks:
+  - stable_read
+  - not_zero
+  - not_blank
+  - size_matches
+  - compare_reference
+
+recipes:
+  - id: restore_reference
+    title: Записать эталонную прошивку (EEPROM этого устройства сохраняется)
+    action: write_reference
+  - id: restore_image
+    title: Записать официальный образ (--image, образ flash+eeprom 33792 байта)
+    action: write_image
+
+notes: |
+  При записи flash avrdude стирает весь чип, включая EEPROM, — поэтому EEPROM входит в образ
+  и восстанавливается той же командой. Если EEPROM на чипе пустая (0xFF), она будет взята из
+  источника — система предупредит. Фьюзы не трогаются.
+  ATmega328 (без P) имеет подпись 1E9514 — для него нужен отдельный профиль.

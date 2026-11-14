@@ -20,9 +20,13 @@ class Safety:
     def programmer_voltage(self) -> float:
         return float(self.cfg["programmer_voltage"])
 
-    def voltage_check(self, profile) -> tuple:
-        """Возвращает ("ok" | "warn" | "block", сообщение)."""
-        pv = self.programmer_voltage
+    def voltage_check(self, profile, programmer_voltage: float | None = None) -> tuple:
+        """Возвращает ("ok" | "warn" | "block", сообщение).
+
+        programmer_voltage — напряжение конкретного адаптера (из настроек плагина);
+        если не задано, берётся общее safety.programmer_voltage.
+        """
+        pv = self.programmer_voltage if programmer_voltage is None else float(programmer_voltage)
         tol = float(self.cfg.get("voltage_tolerance", 0.3))
         v = profile.voltage if profile else None
         if v is None:
@@ -31,7 +35,7 @@ class Safety:
         if abs(v - pv) > tol:
             return "block", (f"чип рассчитан на {v} В, а адаптер — на {pv} В. Работа остановлена, "
                              f"чтобы не повредить чип: нужен переходник на {v} В "
-                             f"(и смените programmer_voltage в config.yaml).")
+                             f"(и смените programmer_voltage в config.yaml — общий или у плагина).")
         return "ok", f"напряжение совместимо: чип {v} В, адаптер {pv} В"
 
     def write_blockers(self, *, verified: bool, findings: list, profile, image: bytes,

@@ -25,8 +25,8 @@ STEPS = 7
 
 PREFLIGHT = [
     "Устройство обесточено и отключено от сети, конденсаторы разряжены.",
-    "Адаптер работает на {pv} В — маркировка чипа сверена с даташитом "
-    "(чипам на 1.8 В нужен переходник).",
+    "Адаптер работает на {pv} В (или на programmer_voltage из настроек плагина) — маркировка "
+    "чипа сверена с даташитом (чипам на 1.8 В нужен переходник).",
     "Прищепка стоит ровно: красный провод = вывод 1 (точка или скос на корпусе чипа).",
     "Запись будет только после резервной копии и вашего подтверждения.",
 ]
@@ -162,16 +162,21 @@ class Conductor:
                                    fingerprint=det.fingerprint,
                                    profile_id=det.profile.id if det.profile else None)
 
-    def _voltage_gate(self, profile) -> bool:
-        status, msg = self.safety.voltage_check(profile)
+    def adapter_voltage(self, plugin=None) -> float:
+        """Напряжение адаптера: своё у плагина (programmer_voltage в его настройках) или общее."""
+        v = plugin.settings.get("programmer_voltage") if plugin is not None else None
+        return float(v) if v is not None else self.safety.programmer_voltage
+
+    def _voltage_gate(self, profile, plugin=None) -> bool:
+        pv = self.adapter_voltage(plugin)
+        status, msg = self.safety.voltage_check(profile, pv)
         self.log(f"напряжение: {status}: {msg}")
         if status == "block":
             self.ui.error(msg)
             return False
         if status == "warn":
             self.ui.warn(msg)
-            answer = self.ui.yes_no(f"Вы проверили по даташиту, что чип рассчитан на "
-                                    f"{self.safety.programmer_voltage} В?")
+            answer = self.ui.yes_no(f"Вы проверили по даташиту, что чип рассчитан на {pv} В?")
             return answer == "yes"
         self.ui.ok(msg)
         return True
@@ -369,7 +374,7 @@ class Conductor:
             ui.ok(f"профиль: {det.profile.name}")
 
         ui.step(3, STEPS, "Совместимость по напряжению")
-        if not self._voltage_gate(det.profile):
+        if not self._voltage_gate(det.profile, plugin):
             return self._finish("blocked_voltage")
 
         ui.step(4, STEPS, "Резервная копия «до» (чтение с повторной сверкой)")
@@ -387,7 +392,7 @@ class Conductor:
             det.profile, det.profile_score = board, 1.0
             self.memory.update_session(sid, profile_id=board.id)
             ui.ok(f"по содержимому узнана плата: {board.name}")
-            if board.voltage != previous.voltage and not self._voltage_gate(board):
+            if board.voltage != previous.voltage and not self._voltage_gate(board, plugin):
                 return self._finish("blocked_voltage")
 
         ui.step(5, STEPS, "Диагностика")
@@ -539,7 +544,7 @@ class Conductor:
         plugin = self.plugin(det.plugin)
 
         ui.step(2, 5, "Совместимость по напряжению")
-        if det.profile is None or not self._voltage_gate(det.profile):
+        if det.profile is None or not self._voltage_gate(det.profile, plugin):
             return self._finish("blocked_voltage")
 
         ui.step(3, 5, "Копия текущего состояния (чтобы откат тоже можно было отменить)")

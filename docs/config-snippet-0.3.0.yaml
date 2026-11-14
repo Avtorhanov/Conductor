@@ -1,0 +1,68 @@
+# Дирижёр 0.3.0 — секции для config.yaml. Скопируйте нужные под `plugins:` (с отступом 2 пробела)
+# и секцию `sigrok:` на верхний уровень. Без этих секций новые лезвия просто выключены.
+#
+# Общие для всех ключи:
+#   programmer_voltage: 5.0   — своё напряжение адаптера (иначе берётся safety.programmer_voltage)
+#   extra_args: ["..."]       — доп. параметры программы; опасные (снятие защиты, фьюзы,
+#                               стирание всего чипа, отключение проверок) отклоняются.
+#   probe_timeout / read_timeout / write_timeout — секунды.
+
+plugins:
+  probe_rs:                     # ARM Cortex-M / RISC-V по SWD/JTAG (ST-Link, CMSIS-DAP, J-Link)
+    enabled: false
+    chip: "STM32F103C8"         # имя из `probe-rs chip list`
+    protocol: "swd"
+    flash_base: 0x08000000
+    flash_size: 65536
+    # probe: "0483:3748"        # если подключено несколько отладчиков
+    # speed: 1000               # кГц
+
+  openocd:                      # то же через OpenOCD (если probe-rs не знает ваш чип/адаптер)
+    enabled: false
+    interface: "interface/stlink.cfg"
+    target: "target/stm32f1x.cfg"
+    mcu: "STM32F103C8"          # по этому имени выбирается профиль
+    flash_base: 0x08000000
+    flash_size: 65536
+    # pre_init: ["adapter speed 1000"]
+    # halt_cmd: "halt"          # по умолчанию "reset halt"
+
+  minipro:                      # T48 / TL866II+: память в панельке
+    enabled: false
+    device: "AT24C02"           # имя из `minipro -L 24C02`
+    # target_class: memory.i2c_eeprom   # обычно определяется по имени сам
+
+  bp5_i2c:                      # Bus Pirate 5: I2C EEPROM 24Cxx
+    enabled: false
+    port: "/dev/ttyACM0"
+    eeprom: "24C02"             # 24C01 … 24C512
+    address: 0x50
+    psu_voltage: 3.3            # BP5 питает чип; 0 — питание от платы (тогда задайте programmer_voltage)
+    pullups: true
+
+  avrdude:                      # AVR (ATmega/ATtiny) по ISP/UPDI
+    enabled: false
+    programmer: "usbasp"        # -c
+    part: "m328p"               # -p
+    # port: "/dev/ttyUSB0"      # -P (для arduino/serialupdi)
+    # bitclock: 10              # -B (медленнее — надёжнее на «тихих» МК)
+    programmer_voltage: 5.0     # USBasp обычно 5 В (есть перемычка 3.3 В)
+    memories: [flash, eeprom]
+    flash_size: 32768
+    eeprom_size: 1024
+
+  esptool:                      # ESP8266/ESP32 по USB-UART
+    enabled: false
+    port: "/dev/ttyUSB0"
+    baud: 460800
+    chip: "auto"
+    # cmd: "esptool"            # по умолчанию esptool, если есть, иначе esptool.py
+
+# Замер логическим анализатором: python3 -m dirizher.extras.sigrok …  (только приём сигналов)
+sigrok:
+  driver: "fx2lafw"             # список: python3 -m dirizher.extras.sigrok --scan
+  channels: "D0,D1,D2,D3"
+  samplerate: "1m"
+  time_ms: 2000
+  # decode: "spi:clk=D0:mosi=D1:miso=D2:cs=D3"
+  # annotation: "spi"

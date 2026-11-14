@@ -2,6 +2,17 @@
 
 Формат: версия — дата — что изменилось. Новое лезвие повышает второе число версии (0.2.0, 0.3.0…).
 
+## 0.3.0 — 2026-11-14
+### Добавлено
+- Лезвия (все выключены по умолчанию): `probe_rs`, `openocd` (ARM по SWD/JTAG), `avrdude` (AVR, образ flash+EEPROM),
+  `esptool` (ESP8266/ESP32, v4 и v5), `minipro` (T48/TL866II+), `bp5_i2c` (Bus Pirate 5, I2C EEPROM 24Cxx).
+- `plugins/_common.py`: запрет опасных параметров (снятие защиты, стирание всего чипа, фьюзы, отключение сверки).
+- Проверка `binwalk_expect`; замер логическим анализатором `python3 -m dirizher.extras.sigrok`.
+- 9 профилей (STM32F103C8, ATmega328P, ESP32 4 МБ, 24C02 + общие), `system/99-dirizher-tools.rules`,
+  `docs/INTEGRATIONS.md`, `docs/config-snippet-0.3.0.yaml`; 54 новых автотеста (всего 96).
+### Изменено
+- Ядро: своё напряжение адаптера у каждого плагина (`programmer_voltage` в настройках плагина).
+
 ## 0.2.0 — 2026-11-14
 ### Добавлено
 - Интерфейсы поверх ядра (`dirizher/interface/`), ядро не менялось:
