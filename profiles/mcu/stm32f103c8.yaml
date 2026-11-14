@@ -1,0 +1,36 @@
+# STM32F103C8 («Blue Pill» и многие устройства). Модель задаётся в настройках плагина
+# (probe_rs: chip, openocd: mcu) — по ней и выбирается этот профиль.
+
+id: stm32f103c8
+name: STMicroelectronics STM32F103C8 (64 КБ флеш, 3.3 В)
+class: mcu.arm
+match:
+  name: ["STM32F103C8", "STM32F103C8TX", "STM32F103C8T6"]
+priority: 10
+voltage: 3.3
+size: 65536            # 64 КБ; у части чипов фактически 128 КБ — тогда поменяйте flash_size и size
+allow_write: true
+
+checks:
+  - stable_read
+  - not_zero
+  - not_blank
+  - size_matches
+  - compare_reference
+  - type: magic        # таблица векторов: начальный указатель стека смотрит в ОЗУ 0x2000xxxx
+    offset: 0x3
+    hex: "20"
+    title: таблица векторов (указатель стека в ОЗУ)
+
+recipes:
+  - id: restore_reference
+    title: Записать эталонную прошивку
+    action: write_reference
+  - id: restore_image
+    title: Записать официальный образ (--image, полный образ 64 КБ)
+    action: write_image
+
+notes: |
+  Флеш с адреса 0x08000000. Подключение SWD: SWDIO, SWCLK, GND, (NRST), питание платы — своё.
+  Клоны (CKS32, APM32, GD32F103) могут иметь другой IDCODE — для них отдельный профиль.
+  Защиту чтения (RDP) «Дирижёр» не снимает.

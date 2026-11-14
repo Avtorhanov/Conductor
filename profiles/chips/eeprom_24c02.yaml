@@ -1,0 +1,27 @@
+id: eeprom_24c02
+name: I2C EEPROM 24C02 (256 байт)
+class: memory.i2c_eeprom
+match:
+  name: ["24C02", "AT24C02", "24LC02", "24LC02B", "24AA02", "M24C02", "BR24C02", "CAT24C02", "FM24C02"]
+priority: 10
+voltage: null          # зависит от производителя (1.7–5.5 / 2.5–5.5 В) — подтвердите
+size: 256
+allow_write: true
+
+checks:
+  - stable_read
+  - not_zero
+  - size_matches
+  - compare_reference
+
+recipes:
+  - id: restore_reference
+    title: Записать эталонное содержимое
+    action: write_reference
+  - id: restore_image
+    title: Записать образ (--image, 256 байт)
+    action: write_image
+
+notes: |
+  Адрес по умолчанию 0x50 (A0–A2 на GND). При записи вывод WP (7) — на GND.
+  Встречается в мониторах (EDID), ТВ, автомобильных блоках, модулях памяти (SPD — не трогать без нужды).

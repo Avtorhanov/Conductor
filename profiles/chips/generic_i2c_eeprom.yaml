@@ -1,0 +1,28 @@
+# Общий профиль для любой I2C EEPROM серии 24Cxx (Bus Pirate 5 или minipro).
+
+id: generic_i2c_eeprom
+name: Любая I2C EEPROM 24Cxx (общий профиль)
+class: memory.i2c_eeprom
+match: {}
+priority: 0
+voltage: null          # 24Cxx обычно 1.7–5.5 В или 2.5–5.5 В — сверьте маркировку
+size: null
+allow_write: true
+
+checks:
+  - stable_read
+  - not_zero
+  - compare_reference
+
+recipes:
+  - id: restore_reference
+    title: Записать эталонное содержимое
+    action: write_reference
+  - id: restore_image
+    title: Записать образ (--image)
+    action: write_image
+
+notes: |
+  В EEPROM часто лежат настройки, серийные номера и калибровки — это УНИКАЛЬНЫЕ данные.
+  Эталон с другого устройства переносите только понимая, что именно меняете.
+  Полностью пустая EEPROM (0xFF) — нормальное состояние, поэтому not_blank здесь не используется.

@@ -1,0 +1,27 @@
+# Общий профиль для любого AVR через avrdude. Образ = flash (+ eeprom, если включена в memories).
+
+id: generic_avr
+name: Любой микроконтроллер AVR (общий профиль)
+class: mcu.avr
+match: {}
+priority: 0
+voltage: null          # AVR обычно работают в диапазоне (1.8–5.5 В) — подтвердите по плате
+size: null
+allow_write: true
+
+checks:
+  - stable_read
+  - not_zero
+  - not_blank
+  - compare_reference
+
+recipes:
+  - id: restore_reference
+    title: Записать эталонную прошивку
+    action: write_reference
+  - id: restore_image
+    title: Записать официальный образ (--image, образ flash+eeprom)
+    action: write_image
+
+notes: |
+  Фьюзы и lock-биты «Дирижёр» не читает в образ и никогда не пишет.

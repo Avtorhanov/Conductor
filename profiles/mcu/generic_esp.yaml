@@ -1,0 +1,29 @@
+# Общий профиль для любого ESP8266/ESP32 через esptool.
+
+id: generic_esp
+name: Любой ESP8266/ESP32 (общий профиль)
+class: mcu.esp
+match: {}
+priority: 0
+voltage: 3.3           # ESP работают только от 3.3 В; USB-UART должен быть на 3.3 В логики
+size: null
+allow_write: true
+
+checks:
+  - stable_read
+  - not_zero
+  - not_blank
+  - compare_reference
+
+recipes:
+  - id: restore_reference
+    title: Записать эталонную прошивку
+    action: write_reference
+  - id: restore_image
+    title: Записать полный образ флеша (--image)
+    action: write_image
+
+notes: |
+  В флеше есть уникальные данные устройства (раздел NVS: Wi-Fi, ключи, калибровка PHY).
+  Для конкретной платы сделайте профиль платы с preserve по её таблице разделов.
+  При включённом шифровании флеша эталон с другой платы её не оживит.

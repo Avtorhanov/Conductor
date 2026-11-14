@@ -1,0 +1,29 @@
+# Общий профиль для любого микроконтроллера ARM Cortex-M (через probe_rs или openocd).
+# Срабатывает, когда точного профиля нет. Напряжение неизвестно — система спросит.
+
+id: generic_mcu_arm
+name: Любой микроконтроллер ARM Cortex-M (общий профиль)
+class: mcu.arm
+match: {}
+priority: 0
+voltage: null          # большинство STM32/GD32/nRF — 3.3 В, но сверяйте с платой
+size: null
+allow_write: true
+
+checks:
+  - stable_read
+  - not_zero
+  - not_blank
+  - compare_reference
+
+recipes:
+  - id: restore_reference
+    title: Записать эталонную прошивку
+    action: write_reference
+  - id: restore_image
+    title: Записать официальный образ (--image, полный образ флеша)
+    action: write_image
+
+notes: |
+  Если чтение не проходит или возвращает ошибку доступа — вероятно, включена защита
+  чтения (RDP). «Дирижёр» её не снимает: снятие стирает прошивку (PRINCIPLES.md, п. 12).

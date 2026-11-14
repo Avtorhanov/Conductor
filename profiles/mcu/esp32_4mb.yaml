@@ -1,0 +1,42 @@
+# ESP32 (классический) с флешем 4 МБ — самый частый модуль (ESP32-WROOM-32 и др.).
+
+id: esp32_4mb
+name: ESP32 с флешем 4 МБ (ESP32-WROOM-32 и др.)
+class: mcu.esp
+match:
+  name: "ESP32"
+  size: 4194304
+priority: 10
+voltage: 3.3
+size: 4194304
+allow_write: true
+
+checks:
+  - stable_read
+  - not_zero
+  - not_blank
+  - size_matches
+  - type: magic        # у классического ESP32 загрузчик лежит с адреса 0x1000, первый байт образа 0xE9
+    offset: 0x1000
+    hex: "E9"
+    title: заголовок загрузчика ESP32 (0x1000)
+  - type: magic        # таблица разделов по умолчанию с 0x8000, запись начинается с AA 50
+    offset: 0x8000
+    hex: "AA50"
+    title: таблица разделов (0x8000)
+  - compare_reference
+
+recipes:
+  - id: restore_reference
+    title: Записать эталонную прошивку
+    action: write_reference
+  - id: restore_image
+    title: Записать полный образ флеша 4 МБ (--image)
+    action: write_image
+
+notes: |
+  Смещения загрузчика (0x1000) и таблицы разделов (0x8000) — для классического ESP32
+  (у ESP32-S3/C3 загрузчик с 0x0 — для них свой профиль).
+  Уникальные данные (NVS, phy_init) — в разделах по таблице конкретной прошивки:
+  добавьте preserve в профиль ПЛАТЫ, когда узнаете смещения (esptool read_flash 0x8000 0xC00 + gen_esp32part).
+  Если включено шифрование флеша, дамп — шифротекст: восстанавливайте только копией с ЭТОЙ ЖЕ платы.

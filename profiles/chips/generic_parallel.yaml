@@ -1,0 +1,29 @@
+# Общий профиль для параллельной памяти в панельке T48/TL866 (27Cxx, 28Cxx, 29Fxx, 39SFxxx…).
+
+id: generic_parallel
+name: Параллельная память в панельке (общий профиль)
+class: memory.parallel
+match: {}
+priority: 0
+voltage: null          # программатор сам подаёт напряжение; подтвердите тип микросхемы
+size: null
+allow_write: true
+
+checks:
+  - stable_read
+  - not_zero
+  - not_blank
+  - compare_reference
+  - binwalk
+
+recipes:
+  - id: restore_reference
+    title: Записать эталонное содержимое
+    action: write_reference
+  - id: restore_image
+    title: Записать образ (--image)
+    action: write_image
+
+notes: |
+  УФ-стираемые EPROM (27Cxx с окошком) перед записью нужно стереть ультрафиолетом —
+  иначе запись не пройдёт сверку (это безопасно: копия «до» сохранена).

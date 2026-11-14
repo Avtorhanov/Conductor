@@ -16,7 +16,7 @@
 ## Карта кода
 - `dirizher/core/pipeline.py` — Conductor, сценарий из 7 шагов. Запись — только через `Conductor.apply()`.
 - `dirizher/core/plugin.py` — интерфейс плагина: `available / probe / read / write`.
-- `dirizher/plugins/` — лезвия (`flashrom_spi`, `simulator`, `_template`).
+- `dirizher/plugins/` — лезвия (`flashrom_spi`, `simulator`, `probe_rs`, `openocd`, `avrdude`, `esptool_flash`, `minipro`, `bp5_i2c`, `_template`); общие помощники — `_common.py`. Помощник-процесс BP5 — `dirizher/helpers/`, замер sigrok — `dirizher/extras/`. Карточки — `docs/INTEGRATIONS.md`.
 - `dirizher/core/checks.py` — проверки (`@register`). `core/safety.py` — условия записи.
 - `core/storage.py` — копии по SHA-256. `core/memory.py` — SQLite. `core/learning.py` — обучение.
 - `core/ui.py` — весь ввод-вывод. `profiles/` — база знаний (YAML).
