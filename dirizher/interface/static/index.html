@@ -463,6 +463,7 @@ function optTag(o) {
   if (o.action === "run") return p.dry_run ? ["без записи", "tag-ok"] : ["запись после «ДА»", "tag-warn"];
   if (o.action === "rollback") return ["запись после «ДА»", "tag-warn"];
   if (o.action === "detect") return ["только чтение", "tag-ok"];
+  if (o.action === "capture") return ["только приём", "tag-ok"];
   if (o.action === "sim") return ["учебный", "tag-sim"];
   return null;
 }

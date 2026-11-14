@@ -25,7 +25,7 @@ GUIDE_PATH = Path(__file__).with_name("guide.yaml")
 
 SIM_ACTIONS = ("status", "reset", "corrupt", "erase", "flaky", "steady")
 SNAPSHOT_KINDS = ("before", "after", "written")
-KIND_RU = {"run": "ремонт", "detect": "опознание", "rollback": "откат"}
+KIND_RU = {"run": "ремонт", "detect": "опознание", "rollback": "откат", "capture": "замер"}
 SNAP_RU = {"before": "копия «до»", "after": "копия «после»", "written": "что записывали"}
 
 # Действия, которые Штурман умеет предлагать.
@@ -40,6 +40,7 @@ ACTIONS = {
     "reference": {"job": True, "params": {"session", "kind", "label"}, "pick": "reference",
                   "title": "Эталон из сеанса"},
     "sim": {"job": True, "params": {"do"}, "title": "Учебная микросхема"},
+    "capture": {"job": True, "params": {"scan"}, "title": "Замер сигналов"},
     "export": {"job": False, "params": {"session", "kind"}, "pick": "export", "title": "Дамп файлом"},
     "show": {"job": False, "params": {"session"}, "title": "Сеанс"},
     "history": {"job": False, "params": set(), "title": "Журнал"},
@@ -230,6 +231,12 @@ def execute(c, action: str, params: dict | None = None):
             raise ValueError(f"неизвестная учебная команда «{do}»")
         c.ui.ok(getattr(c.plugin("simulator"), f"do_{do}")())
         return None
+    if action == "capture":
+        # Логический анализатор только принимает сигналы — в устройство ничего не пишется.
+        if c.sim:
+            raise ValueError("замер работает только с настоящим логическим анализатором — выключите учебный режим")
+        from ..extras import sigrok
+        return sigrok.scan(c) if p.get("scan") else sigrok.capture(c, c.cfg)
     raise ValueError(f"действие «{action}» не выполняется ядром")
 
 
@@ -249,6 +256,8 @@ def job_title(action: str, params: dict, dry_run: bool = False) -> str:
         return title
     if action == "sim":
         return f"Учебная микросхема: {p.get('do', '')}"
+    if action == "capture":
+        return "Поиск анализатора" if p.get("scan") else "Замер сигналов"
     title = ACTIONS.get(action, {}).get("title", action)
     if p.get("session"):
         title += f" · сеанс №{p['session']}"
@@ -461,6 +470,8 @@ def suggest(c, limit: int = 6) -> list:
         if not hardware_ready:
             why = "; ".join(f"{r['name']}: {r['status']}" for r in c.plugin_report) or "нет плагинов"
             items.append(_opt("Нет подключённых инструментов", "important", why, lesson="first_chip"))
+            items.append(_opt("Какой инструмент подключить", "tip",
+                              "flashrom, Bus Pirate 5, ST-Link, T48, USBasp, ESP — что у вас есть", next="tools"))
             items.append(_opt("Потренироваться без железа", "tip",
                               "виртуальная микросхема — весь цикл без риска", next="sim"))
         elif not sessions:
@@ -505,6 +516,13 @@ def after(action: str, params: dict | None, outcome: str | None, sid, sim: bool 
         return by_do.get(do, [])
     if action == "reference":
         return [_opt("К началу", next="home")]
+    if action == "capture":
+        if outcome == "captured":
+            first = (_opt("Записать сигналы", action="capture") if p.get("scan")
+                     else _opt("Записать ещё раз", action="capture"))
+            return [first, _opt("Открыть журнал сеанса", action="show", params={"session": sid}) if sid
+                    else _opt("К началу", next="home"), _opt("Как читать замер", lesson="tool_sigrok")]
+        return [_opt("Что проверить", lesson="tool_sigrok"), _opt("Попробовать ещё раз", **same)]
     if outcome is None:
         return []
     real = dict(p)
