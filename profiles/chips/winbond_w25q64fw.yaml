@@ -1,0 +1,30 @@
+# Пример 1.8-вольтового чипа. С адаптером на 3.3 В система остановит работу,
+# пока вы не поставите переходник на 1.8 В и не поменяете programmer_voltage.
+
+id: winbond_w25q64fw
+name: Winbond W25Q64FW (8 МБ, SPI NOR, 1.8 В)
+class: memory.spi_nor
+match:
+  jedec_id: "EF6017"   # сверьте с даташитом своей ревизии чипа
+priority: 10
+voltage: 1.8
+size: 8388608
+allow_write: true
+
+checks:
+  - stable_read
+  - not_zero
+  - not_blank
+  - size_matches
+  - compare_reference
+
+recipes:
+  - id: restore_reference
+    title: Записать эталонную прошивку
+    action: write_reference
+  - id: restore_image
+    title: Записать официальный образ (--image)
+    action: write_image
+
+notes: |
+  Чип на 1.8 В. Подача 3.3 В может его повредить — нужен переходник 1.8 В.

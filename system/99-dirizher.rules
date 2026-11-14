@@ -1,0 +1,8 @@
+# Доступ к программаторам без sudo для пользователей группы plugdev.
+# Установка:
+#   sudo cp system/99-dirizher.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+#   sudo usermod -aG plugdev $USER     (затем перелогиньтесь)
+
+# CH341A в режиме SPI-программатора
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="5512", MODE="0660", GROUP="plugdev"

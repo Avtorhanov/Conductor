@@ -1,0 +1,32 @@
+# Профиль ЧИПА: узнаётся по JEDEC ID ещё до чтения содержимого.
+
+id: winbond_w25q64
+name: Winbond W25Q64 (8 МБ, SPI NOR, 3.3 В)
+class: memory.spi_nor
+match:
+  jedec_id: "EF4017"   # производитель EF (Winbond), тип 40, ёмкость 17 (64 Мбит)
+priority: 10
+voltage: 3.3
+size: 8388608          # 8 МБ
+allow_write: true
+
+checks:
+  - stable_read
+  - not_zero
+  - not_blank
+  - size_matches
+  - compare_reference
+  - binwalk
+
+recipes:
+  - id: restore_reference
+    title: Записать эталонную прошивку
+    action: write_reference
+  - id: restore_image
+    title: Записать официальный образ (--image)
+    action: write_image
+
+notes: |
+  Распространённая память в роутерах, ТВ-платах, материнских платах.
+  Корпус SOIC-8: вывод 1 отмечен точкой. Внимание: версии W25Q64FW/JW рассчитаны
+  на 1.8 В и имеют другой JEDEC ID — для них отдельный профиль и переходник.

@@ -1,0 +1,28 @@
+id: macronix_mx25l6406
+name: Macronix MX25L6406/6433 (8 МБ, SPI NOR, 3.3 В)
+class: memory.spi_nor
+match:
+  jedec_id: "C22017"   # производитель C2 (Macronix), тип 20, ёмкость 17 (64 Мбит)
+priority: 10
+voltage: 3.3
+size: 8388608
+allow_write: true
+
+checks:
+  - stable_read
+  - not_zero
+  - not_blank
+  - size_matches
+  - compare_reference
+  - binwalk
+
+recipes:
+  - id: restore_reference
+    title: Записать эталонную прошивку
+    action: write_reference
+  - id: restore_image
+    title: Записать официальный образ (--image)
+    action: write_image
+
+notes: |
+  Часто встречается в роутерах и ТВ-приставках. Серия MX25U — это 1.8 В (другой профиль).

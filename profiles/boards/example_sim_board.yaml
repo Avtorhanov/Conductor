@@ -1,0 +1,41 @@
+# Профиль ПЛАТЫ (пример для симулятора).
+# Уточняет профиль чипа: узнаётся по содержимому дампа (content_match)
+# и знает уникальные области платы (preserve), которые нельзя затирать при ремонте.
+
+id: example_sim_board
+name: Учебная плата (симулятор) на W25Q64
+class: memory.spi_nor
+match:
+  jedec_id: "EF4017"            # тот же чип, что в профиле winbond_w25q64
+content_match:
+  - offset: 0x0
+    hex: "4657494D"             # "FWIM" — заголовок прошивки этой платы
+priority: 20
+voltage: 3.3
+size: 8388608
+allow_write: true
+
+preserve:                       # уникальное для каждой платы: берётся с текущего чипа
+  - offset: 0x7FF000
+    length: 0x1000
+    why: MAC-адрес и серийный номер платы
+
+checks:
+  - stable_read
+  - not_zero
+  - not_blank
+  - size_matches
+  - compare_reference
+  - binwalk
+
+recipes:
+  - id: restore_reference
+    title: Записать эталонную прошивку (MAC и серийник сохраняются)
+    action: write_reference
+  - id: restore_image
+    title: Записать официальный образ (--image)
+    action: write_image
+
+notes: |
+  Учебный профиль. Для настоящей платы сделайте такой же: сигнатура из её
+  исправного дампа + области с MAC/серийником/калибровками.

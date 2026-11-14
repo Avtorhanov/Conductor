@@ -1,0 +1,33 @@
+# Общий профиль для ЛЮБОЙ SPI NOR флеш-памяти (серии 25xx).
+# Срабатывает, когда точного профиля нет (с низкой уверенностью).
+# Даёт безопасный минимум: резервная копия, базовые проверки,
+# восстановление из эталона или официального образа.
+# Напряжение здесь неизвестно — система попросит вас подтвердить его по даташиту.
+
+id: generic_spi_nor
+name: Любая SPI NOR флеш-память (общий профиль)
+class: memory.spi_nor
+match: {}              # пусто = подходит к любому чипу этого класса
+priority: 0
+voltage: null          # неизвестно! сверяйте маркировку с даташитом
+size: null
+allow_write: true
+
+checks:
+  - stable_read
+  - not_zero
+  - not_blank
+  - compare_reference
+  - binwalk
+
+recipes:
+  - id: restore_reference
+    title: Записать эталонную прошивку
+    action: write_reference
+  - id: restore_image
+    title: Записать официальный образ (--image)
+    action: write_image
+
+notes: |
+  Общий профиль. После первого опознания система создаёт черновик точного
+  профиля в data/drafts/ — заполните его и перенесите в profiles/chips/.

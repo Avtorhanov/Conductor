@@ -1,0 +1,40 @@
+# ШАБЛОН ПРОФИЛЯ ПЛАТЫ. Файлы на «_» не загружаются.
+# Профиль платы срабатывает ПОСЛЕ чтения: по сигнатуре в дампе.
+# Как найти сигнатуру: снимите исправный дамп (python3 -m dirizher export N --to good.bin)
+# и посмотрите начало файла: hexdump -C good.bin | head
+
+id: brand_model_board
+name: Бренд Модель (плата XXXX) на чипе YYYY
+class: memory.spi_nor
+match:
+  jedec_id: "XXXXXX"           # чип на этой плате
+content_match:                 # чем дамп этой платы отличается от других
+  - offset: 0x0
+    hex: "00112233"
+priority: 20
+voltage: 3.3
+size: 8388608
+allow_write: true
+
+preserve:                      # уникальные данные — НЕ затирать при восстановлении
+  - offset: 0x7F0000
+    length: 0x10000
+    why: MAC-адреса / серийный номер / калибровка радио
+
+checks:
+  - stable_read
+  - not_zero
+  - not_blank
+  - size_matches
+  - compare_reference
+
+recipes:
+  - id: restore_reference
+    title: Записать эталонную прошивку
+    action: write_reference
+  - id: restore_image
+    title: Записать официальный образ (--image)
+    action: write_image
+
+notes: |
+  Типичные неисправности, где на плате стоит чип, особенности подключения.

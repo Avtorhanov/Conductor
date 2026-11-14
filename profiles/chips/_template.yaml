@@ -1,0 +1,35 @@
+# ШАБЛОН ПРОФИЛЯ ЧИПА. Файлы на «_» не загружаются.
+# Скопируйте: cp _template.yaml vendor_model.yaml  и заполните.
+
+id: vendor_model               # уникальный id, латиницей
+name: Производитель Модель (объём, тип, напряжение)
+class: memory.spi_nor          # класс целей = target_class плагина
+match:                         # по каким полям отпечатка узнавать
+  jedec_id: "XXXXXX"           # можно списком: ["EF4017", "EF7017"]
+priority: 10                   # при равенстве выигрывает больший
+voltage: 3.3                   # ОБЯЗАТЕЛЬНО по даташиту
+size: 8388608                  # в байтах; можно 0x800000
+allow_write: true              # false — только чтение и диагностика
+
+checks:                        # какие проверки запускать (по порядку)
+  - stable_read                # повторные чтения совпадают
+  - not_zero                   # не одни нули (нет контакта)
+  - not_blank                  # не стёрт целиком
+  - size_matches               # размер как в профиле
+  - compare_reference          # сравнение с эталоном
+  - binwalk                    # структура дампа (если binwalk установлен)
+  # - type: magic              # сигнатура по смещению
+  #   offset: 0x0
+  #   hex: "27051956"          # пример: заголовок U-Boot uImage
+  #   title: заголовок загрузчика
+
+recipes:                       # способы ремонта
+  - id: restore_reference
+    title: Записать эталонную прошивку
+    action: write_reference
+  - id: restore_image
+    title: Записать официальный образ (--image)
+    action: write_image
+
+notes: |
+  Где встречается, особенности, ссылки на даташит.
