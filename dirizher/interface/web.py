@@ -342,7 +342,7 @@ class App:
             v = raw.get(key)
             if v is None or v == "" or v == "ask":
                 continue
-            if key in ("dry_run", "ok"):
+            if key in ("dry_run", "ok", "scan"):
                 p[key] = bool(v)
             elif key == "session":
                 p[key] = int(v)

@@ -233,7 +233,7 @@ def crc32_region(ci: CheckInput) -> Finding:
   params: {dry_run: true, label: ask}    # ask — спросить метку у человека
 ```
 Урок — `title`, `why`, `steps` (строка или `text` + `code`), `check`, `related`, `group: work | dev`.
-Действия: `run`, `detect`, `rollback`, `feedback`, `reference`, `export`, `sim` (`do`), `history`, `plugins`, `profiles`, `roadmap`, `builder`.
+Действия: `run`, `detect`, `rollback`, `feedback`, `reference`, `export`, `sim` (`do`), `history`, `plugins`, `profiles`, `roadmap`, `builder`, `capture` (`scan: true` — найти анализатор; замер только принимает сигналы).
 Проверка: `python3 -m unittest tests.test_interface -v` — тест ловит опечатки в ссылках и недостижимые вопросы. Затем обновите страницу.
 
 Подсказки «сейчас важно» и «что дальше» — функции `suggest()` и `after()` в `guide.py`. Новое правило подсказки — новая строка там же + тест.

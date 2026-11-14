@@ -12,7 +12,7 @@
 #
 # Действия: run (dry_run, label, image), detect, rollback (dry_run), feedback,
 #   reference (label), export, sim (do: status|reset|corrupt|erase|flaky|steady),
-#   history, plugins, profiles, roadmap, builder.
+#   history, plugins, profiles, roadmap, builder, capture (scan: true — найти анализатор).
 #   Значение «ask» в params — спросить у человека (метку или файл образа).
 #   Для rollback, feedback, reference, export сеанс выбирается из журнала.
 #
@@ -50,6 +50,10 @@ nodes:
         label: Забрать дамп файлом
         explain: скачать копию «до» или «после» на телефон или ПК
         action: export
+      - icon: "🔌"
+        label: Подключить инструмент
+        explain: Bus Pirate 5, ST-Link, T48, USBasp, ESP, логический анализатор
+        next: tools
       - icon: "🎓"
         label: Потренироваться без железа
         explain: виртуальная микросхема с учебными поломками
@@ -149,6 +153,34 @@ nodes:
       - label: Починить
         next: repair
 
+  tools:
+    ask: Что подключаете?
+    say: Каждый инструмент — отдельное «лезвие». Новые выключены, пока вы не включите их в config.yaml. Порядок первого раза везде один — опознание, план без записи, эталон с исправного устройства.
+    options:
+      - label: SPI-флешка 25xx (роутеры, ТВ, материнские платы)
+        explain: CH341A или SPI самого Raspberry Pi — flashrom
+        lesson: first_chip
+      - label: EEPROM 24Cxx через Bus Pirate 5
+        explain: настройки, серийники, EDID — 256 байт … 64 КБ
+        lesson: tool_bp5
+      - label: Микроконтроллер ARM (STM32 и др.) — ST-Link
+        explain: probe-rs или OpenOCD по SWD
+        lesson: tool_arm
+      - label: Микросхема в панельке — T48 / TL866II+
+        explain: 24Cxx, 25xx, 93Cxx, 27/28/29/39
+        lesson: tool_minipro
+      - label: AVR (ATmega, Arduino) — USBasp
+        explain: flash + EEPROM, фьюзы не трогаются
+        lesson: tool_avr
+      - label: ESP8266 / ESP32 — USB-UART
+        explain: весь флеш модуля через esptool
+        lesson: tool_esp
+      - label: Логический анализатор — замер сигналов
+        explain: "только приём — читает ли процессор флеш при включении"
+        lesson: tool_sigrok
+      - label: Что сейчас подключено и включено
+        action: plugins
+
   develop:
     ask: Что развиваем?
     say: Правило слоёв — новый чип или плата = новый профиль (YAML), новый инструмент = новый плагин. Ядро при этом не меняется.
@@ -167,6 +199,8 @@ nodes:
         lesson: dev_board_profile
       - label: Новая проверка диагностики
         lesson: dev_check
+      - label: Проверка структуры прошивки (binwalk)
+        lesson: dev_binwalk_expect
       - label: Новый инструмент (плагин)
         lesson: dev_plugin
       - label: Тесты без железа
@@ -197,8 +231,201 @@ nodes:
         action: history
       - label: Какие инструменты и профили подключены
         action: plugins
+      - label: Какой инструмент нужен для моей микросхемы
+        next: tools
 
 lessons:
+  # ───────────── инструменты 0.3.0 ─────────────
+  tool_bp5:
+    group: work
+    title: EEPROM 24Cxx через Bus Pirate 5
+    why: В маленьких EEPROM хранятся настройки, серийные номера, калибровки, EDID монитора. Испорченные байты — частая причина «кирпича».
+    steps:
+      - Подключите BP5 по USB — он появится как /dev/ttyACM0. Права — группа dialout (один раз, затем перелогиниться).
+      - text: Прищепка или провода к микросхеме — SDA, SCL, GND и VCC от BP5. Вывод WP (7) на время записи — к GND.
+        code: sudo usermod -aG dialout $USER
+      - text: Включите лезвие в config.yaml (образец — docs/config-snippet-0.3.0.yaml). Модель — как на корпусе.
+        code: |
+          plugins:
+            bp5_i2c:
+              enabled: true
+              port: "/dev/ttyACM0"
+              eeprom: "24C02"
+              psu_voltage: 3.3      # BP5 питает чип; 0 — питание от платы
+      - text: «Узнать, что за микросхема». У 24Cxx нет ID — Дирижёр проверит, что микросхема отвечает по адресу 0x50, а модель возьмёт из настроек.
+        code: python3 -m dirizher detect
+      - Затем «Снять копию с исправного устройства». Формат ответов BP5 проверен только на эмуляторе (ПРОВЕРИТЬ НА ЖЕЛЕЗЕ).
+    check: Журнал сеанса — строки помощника bp5_i2c (FOUND, READ 256). Если микросхема молчит — проверьте подтяжки и питание.
+    related:
+      - label: Узнать, что за микросхема
+        action: detect
+      - label: Все карточки инструментов
+        lesson: tool_cards
+
+  tool_arm:
+    group: work
+    title: Микроконтроллер ARM через ST-Link (probe-rs или OpenOCD)
+    why: Прошивка многих устройств живёт прямо во флеше микроконтроллера (STM32, GD32, nRF). Её читают и пишут по SWD.
+    steps:
+      - Провода SWD — SWDIO, SWCLK, GND и (по возможности) NRST. Плата питается сама; ST-Link должен «видеть» её напряжение.
+      - text: Поставьте probe-rs (основной путь) или OpenOCD (запасной).
+        code: |
+          curl --proto '=https' --tlsv1.2 -LsSf https://github.com/probe-rs/probe-rs/releases/latest/download/probe-rs-tools-installer.sh | sh
+          sudo apt install openocd        # запасной путь
+      - text: Модель МК по SWD надёжно не узнать — укажите её сами. Не включайте probe_rs и openocd одновременно.
+        code: |
+          plugins:
+            probe_rs:
+              enabled: true
+              chip: "STM32F103C8"
+              flash_base: 0x08000000
+              flash_size: 65536
+      - Если чтение не проходит из-за защиты (RDP) — Дирижёр её не снимает. Снятие стирает прошивку, а обход защит — вне задач проекта.
+    check: «Узнать, что за микросхема» → «модель из настроек, Cortex-M3». Форматы вывода — ПРОВЕРИТЬ НА ЖЕЛЕЗЕ.
+    related:
+      - label: Узнать, что за микросхема
+        action: detect
+      - label: Все карточки инструментов
+        lesson: tool_cards
+
+  tool_minipro:
+    group: work
+    title: Микросхема в панельке — T48 / TL866II+
+    why: Выпаянные микросхемы удобно читать программатором с панелькой — он сам подаёт нужные напряжения.
+    steps:
+      - text: Соберите minipro (один раз) и поставьте правила udev.
+        code: |
+          sudo apt install build-essential pkg-config libusb-1.0-0-dev git
+          git clone https://gitlab.com/DavidGriffith/minipro.git && cd minipro && make && sudo make install
+          sudo cp system/99-dirizher-tools.rules /etc/udev/rules.d/ && sudo udevadm control --reload-rules
+      - text: Точное имя микросхемы — из списка minipro.
+        code: minipro -L W25Q64
+      - text: Впишите его в config.yaml. Класс (SPI, I2C, параллельная) Дирижёр определит по имени.
+        code: |
+          plugins:
+            minipro:
+              enabled: true
+              device: "W25Q64BV"
+      - Микроконтроллеры через minipro Дирижёр не обслуживает — стирание заденет EEPROM и фьюзы.
+    check: «Узнать, что за микросхема» → ID из панельки. Текст minipro — ПРОВЕРИТЬ НА ЖЕЛЕЗЕ.
+    related:
+      - label: Узнать, что за микросхема
+        action: detect
+      - label: Все карточки инструментов
+        lesson: tool_cards
+
+  tool_avr:
+    group: work
+    title: AVR (ATmega, Arduino) через USBasp
+    why: При записи flash avrdude стирает весь чип вместе с EEPROM. Поэтому Дирижёр копирует и восстанавливает flash и EEPROM вместе, а фьюзы не трогает никогда.
+    steps:
+      - text: Поставьте avrdude, подключите USBasp к разъёму ISP (6 или 10 выводов).
+        code: sudo apt install avrdude
+      - text: USBasp обычно работает на 5 В — укажите это, Дирижёр сверит с платой.
+        code: |
+          plugins:
+            avrdude:
+              enabled: true
+              programmer: "usbasp"
+              part: "m328p"
+              programmer_voltage: 5.0
+              memories: [flash, eeprom]
+              flash_size: 32768
+              eeprom_size: 1024
+      - Подпись 0x000000 или 0xFFFFFF — нет связи — проверьте RESET, питание и кварц; попробуйте bitclock 10.
+    check: «Узнать, что за микросхема» → «подпись 0x1E950F». Строку avrdude — ПРОВЕРИТЬ НА ЖЕЛЕЗЕ.
+    related:
+      - label: Узнать, что за микросхема
+        action: detect
+      - label: Все карточки инструментов
+        lesson: tool_cards
+
+  tool_esp:
+    group: work
+    title: ESP8266 / ESP32 через USB-UART
+    why: Весь флеш модуля можно сохранить и вернуть через встроенный загрузчик ESP — без прищепки.
+    steps:
+      - text: Поставьте esptool.
+        code: pipx install esptool
+      - Переведите ESP в режим загрузчика — GPIO0 к GND при сбросе (на платах разработчика — кнопки BOOT и EN). Логика USB-UART — только 3.3 В.
+      - text: Включите лезвие.
+        code: |
+          plugins:
+            esptool:
+              enabled: true
+              port: "/dev/ttyUSB0"
+      - В отпечаток входит MAC — откат возможен только на ту же плату. При шифровании флеша эталон с другой платы не поможет.
+    check: «Узнать, что за микросхема» → чип, MAC и размер флеша. Строки esptool — ПРОВЕРИТЬ НА ЖЕЛЕЗЕ.
+    related:
+      - label: Узнать, что за микросхема
+        action: detect
+      - label: Все карточки инструментов
+        lesson: tool_cards
+
+  tool_sigrok:
+    group: work
+    title: Замер логическим анализатором
+    why: Прежде чем читать и писать, полезно увидеть, что происходит на шине. Например, читает ли процессор флеш при включении и где останавливается загрузка. Анализатор только слушает — в устройство ничего не пишется.
+    steps:
+      - text: Поставьте sigrok-cli и подключите анализатор (дешёвые — на чипе CY7C68013A, драйвер fx2lafw).
+        code: sudo apt install sigrok-cli
+      - Провода к CLK, MOSI, MISO, CS и обязательно GND. Входы дешёвых анализаторов — до 5 В.
+      - text: Настройки — секция sigrok в config.yaml (необязательна).
+        code: |
+          sigrok:
+            channels: "D0,D1,D2,D3"
+            samplerate: "1m"
+            time_ms: 2000
+            decode: "spi:clk=D0:mosi=D1:miso=D2:cs=D3"
+            annotation: "spi"
+      - Нажмите «Записать сигналы» и включите устройство. Запись и расшифровка сохранятся в data/captures/.
+    check: В расшифровке SPI команды 03 или 0B — процессор читает флеш. Тишина — проблема раньше флеша (питание, кварц).
+    related:
+      - label: Найти анализатор
+        action: capture
+        params: {scan: true}
+      - label: Записать сигналы
+        action: capture
+
+  tool_cards:
+    group: work
+    title: Все инструменты — коротко
+    why: Подробные карточки — docs/INTEGRATIONS.md. Здесь — что для чего.
+    steps:
+      - flashrom — SPI-флешки 25xx (CH341A, SPI Raspberry Pi).
+      - Bus Pirate 5 — I2C EEPROM 24Cxx.
+      - probe-rs / OpenOCD — микроконтроллеры ARM по SWD.
+      - minipro — микросхемы в панельке T48 / TL866II+.
+      - avrdude — AVR (flash + EEPROM).
+      - esptool — ESP8266 / ESP32.
+      - binwalk — проверка структуры прошивки в дампе.
+      - sigrok-cli — замер сигналов (только приём).
+      - text: Образец всех настроек — в одном файле.
+        code: cat docs/config-snippet-0.3.0.yaml
+    check: «Какие инструменты и профили подключены» — у включённых будет ✔.
+    related:
+      - label: Что сейчас подключено
+        action: plugins
+
+  dev_binwalk_expect:
+    group: dev
+    title: Проверка структуры прошивки (binwalk_expect)
+    why: Повреждённая прошивка часто теряет узнаваемые части — заголовок загрузчика, файловую систему. Проверка найдёт это без эталона.
+    steps:
+      - text: Снимите копию с ИСПРАВНОГО устройства и посмотрите, что binwalk находит в дампе.
+        code: |
+          python3 -m dirizher export 3 --kind before --to good.bin
+          binwalk good.bin
+      - text: Впишите найденные названия в профиль чипа или платы.
+        code: |
+          checks:
+            - type: binwalk_expect
+              expect: ["uImage header", "Squashfs filesystem"]
+      - Если в дампе неисправного устройства чего-то не хватает — проверка предложит восстановление из эталона или образа.
+    check: python3 -m dirizher profiles — без ошибок; в диагностике появится строка binwalk_expect.
+    related:
+      - label: Конструктор профиля
+        action: builder
   # ───────────── работа ─────────────
   safety:
     group: work
