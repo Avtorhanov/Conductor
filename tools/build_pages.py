@@ -298,6 +298,9 @@ def build_page(out: Path) -> None:
     page = page.replace("<title>Дирижёр</title>", "<title>Дирижёр — демо интерфейса</title>", 1)
     (out / "index.html").write_text(page, encoding="utf-8")
     shutil.copyfile(ROOT / "tools" / "pages_demo.js", out / "demo.js")
+    # Установка демо как приложения (PWA): те же файлы, что отдаёт прибор (web.APP_FILES).
+    for name in web.APP_FILES:
+        shutil.copyfile(web.STATIC / name, out / name)
     (out / ".nojekyll").write_text("", encoding="utf-8")
 
 

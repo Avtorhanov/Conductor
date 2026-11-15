@@ -40,6 +40,16 @@ from ..workshop.hood import Hood, HoodError, classify
 from . import builder, guide
 
 STATIC = Path(__file__).with_name("static")
+# Файлы, чтобы страницу можно было установить как приложение (PWA). Отдаются без кода входа:
+# только описание приложения, значки и сервис-воркер — ни данных прибора, ни действий.
+APP_FILES = {
+    "manifest.webmanifest": "application/manifest+json; charset=utf-8",
+    "sw.js": "text/javascript; charset=utf-8",
+    "icon.svg": "image/svg+xml",
+    "icon-192.png": "image/png",
+    "icon-512.png": "image/png",
+    "icon-maskable-512.png": "image/png",
+}
 WEB_DEFAULTS = {"host": "0.0.0.0", "port": 8080, "pin": "", "trust_localhost": True, "max_upload_mb": 64}
 MAX_EVENTS = 4000
 MAX_JSON = 1 << 20
@@ -527,6 +537,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if method == "GET" and path in ("/", "/index.html"):
                 return self.send_index()
+            if method == "GET" and path.lstrip("/") in APP_FILES:
+                return self.send_app_file(path.lstrip("/"))
             if method == "POST" and self.headers.get("X-Dirizher") != "1":
                 return self.fail(403, "запрос без заголовка X-Dirizher")
             if (method, path) == ("GET", "/api/hello"):
@@ -558,6 +570,18 @@ class Handler(BaseHTTPRequestHandler):
                          "default-src 'self'; script-src 'self' 'unsafe-inline'; "
                          "style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
                          "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
+        self._common_headers()
+        self.end_headers()
+        self.wfile.write(body)
+
+    def send_app_file(self, name: str) -> None:
+        """Файлы установки приложения (PWA): без кода входа — в них нет данных прибора."""
+        body = (STATIC / name).read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", APP_FILES[name])
+        self.send_header("Content-Length", str(len(body)))
+        if name.endswith(".svg"):
+            self.send_header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
         self._common_headers()
         self.end_headers()
         self.wfile.write(body)

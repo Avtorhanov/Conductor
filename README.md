@@ -24,7 +24,8 @@ OpenOCD), AVR, ESP, T48 и **приборы по Modbus RTU** — с настр�
 ```
 
 **Демо в браузере, без прибора:** `https://<владелец>.github.io/<репозиторий>/` — например
-https://avtorhanov.github.io/Conductor--/ после включения Pages (Settings → Pages → Source: **GitHub Actions**).
+https://avtorhanov.github.io/Conductor/ (публикуется из `main`).
+На телефоне демо можно установить как приложение: Chrome → ⋮ → «Установить приложение» (MANUAL, 1.11).
 Задания там проигрываются по записи настоящего ядра на учебной микросхеме; ответы меняют ход как на приборе.
 Собрать локально: `python3 tools/build_pages.py && python3 -m http.server -d _site 8000`.
 
