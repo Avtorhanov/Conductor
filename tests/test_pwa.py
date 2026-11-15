@@ -66,9 +66,11 @@ class ManifestTests(unittest.TestCase):
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         raw = mod.render(192, False)
-        self.assertEqual(mod.png(192, raw), (STATIC / "icon-192.png").read_bytes(),
+        # Сравниваем пиксели, а не байты файла: разные сборки zlib сжимают одно и то же по-разному.
+        data = (STATIC / "icon-192.png").read_bytes()
+        self.assertEqual(png_size(data), (192, 192))
+        self.assertEqual(zlib.decompress(data[33 + 8:-12]), raw,
                          "значок расходится с tools/make_icons.py — перезапустите его")
-        self.assertEqual(len(zlib.decompress(mod.png(192, raw)[33 + 8:-12])), 192 * (192 * 4 + 1))
 
 
 class PageAndWorkerTests(unittest.TestCase):
