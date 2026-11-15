@@ -1,0 +1,49 @@
+id: esptool
+kind: engine
+title: esptool
+tagline: Полный дамп и запись флеша модулей ESP8266 и ESP32 по USB-UART
+group: tool
+icon: wave
+since: "2014"
+lang: Python
+license: GPL-2.0 или новее
+authors:
+  - name: Fredrik Ahlberg (themadinventor)
+    role: автор — начинал как неофициальный проект сообщества
+  - name: Angus Gratton (projectgus)
+    role: многолетний сопровождающий
+  - name: Espressif Systems
+    role: поддерживает проект сейчас
+links:
+  - {title: Документация, url: "https://docs.espressif.com/projects/esptool/"}
+  - {title: Исходный код, url: "https://github.com/espressif/esptool"}
+what: >-
+  Утилита для связи со встроенным загрузчиком чипов Espressif: узнаёт чип и флеш, читает весь флеш в файл
+  и записывает обратно.
+strengths:
+  - Говорит с загрузчиком в ПЗУ самого чипа — его нельзя испортить записью во флеш
+  - Все чипы ESP8266/ESP32; показывает MAC, ID и размер флеша
+  - "Работает с любым USB-UART; платы разработчика (DevKit, NodeMCU) переводит в загрузчик сами"
+  - Написан на Python — работает везде
+how:
+  - При сбросе с GPIO0 = 0 чип запускает загрузчик из ПЗУ и ждёт команд по UART
+  - На платах разработчика это делают линии DTR/RTS переходника — кнопки нажимать не нужно
+  - esptool загружает в ОЗУ ускоритель (stub) и читает флеш блоками; запись — со сверкой
+in_dirizher:
+  - "Лезвие esptool (файл esptool_flash.py); v4 и v5 (команды с дефисами) определяются сами"
+  - "Запись с --flash_mode keep --flash_freq keep --flash_size keep — иначе esptool поправит заголовок, и сверка не совпадёт"
+  - "MAC входит в отпечаток: откат — только на ту же плату. Запрещены --encrypt, --force, erase_flash, erase_region"
+plugin: esptool
+program: esptool
+targets: [mcu.esp]
+adapters: [usb_uart]
+lesson: tool_esp
+install: pipx install esptool
+examples:
+  - {title: Чип, MAC и флеш, cmd: "esptool --port /dev/ttyUSB0 flash_id"}
+  - {title: Весь флеш 4 МБ, cmd: "esptool --port /dev/ttyUSB0 read_flash 0 0x400000 esp.bin"}
+caution:
+  - При включённом шифровании флеша дамп — шифротекст; эталон с другой платы не поможет
+  - "NVS (Wi-Fi, ключи, калибровка) — уникальные данные: добавьте preserve в профиль платы"
+verify:
+  - Строки Chip is / Chip type, MAC и Detected flash size (v4 и v5)

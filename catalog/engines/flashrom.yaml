@@ -1,0 +1,66 @@
+# Карточка движка. Источники об авторах: man flashrom (раздел AUTHORS), сайт flashrom.org.
+id: flashrom
+kind: engine
+title: flashrom
+tagline: Читает, пишет и сверяет SPI-флешки 25xx — роутеры, ТВ-приставки, материнские платы
+group: tool
+icon: chip
+lang: C
+license: GPL-2.0 (часть файлов — GPL-2.0 или новее)
+authors:
+  - name: Проект coreboot
+    role: flashrom вырос из утилиты coreboot (тогда LinuxBIOS) и стал отдельным проектом
+  - name: Carl-Daniel Hailfinger
+    role: многолетний разработчик и сопровождающий
+  - name: Uwe Hermann
+    role: один из ранних разработчиков, автор man-страницы и пакета Debian
+  - name: Stefan Tauner, Anastasia Klimchuk, David Hendricks, Urja Rannikko и другие
+    role: разработка и сопровождение — полный список в man flashrom и истории git
+links:
+  - {title: Сайт и документация, url: "https://flashrom.org"}
+what: >-
+  Программа, которая через программатор «разговаривает» с микросхемой флеш-памяти: узнаёт её, читает всё
+  содержимое в файл и записывает файл обратно. Сама прошивка устройства лежит именно в такой микросхеме.
+strengths:
+  - Знает сотни моделей флешек и сам узнаёт чип по JEDEC ID — не нужно выбирать модель вручную
+  - Десятки программаторов — CH341A, FT2232, Bus Pirate, SPI самого Raspberry Pi (linux_spi)
+  - Перед записью сравнивает с текущим содержимым и стирает только нужные блоки, после записи сверяет
+  - Многолетняя проверка сообществом; есть в пакетах Raspberry Pi OS и Debian
+how:
+  - "Опознание — команда RDID (0x9F): микросхема отвечает тремя байтами JEDEC ID — производитель, тип, ёмкость"
+  - flashrom ищет ID в своей базе и узнаёт размер, страницы, блоки стирания, команды
+  - Чтение — команда READ подряд по всему адресу; результат — файл ровно размера чипа
+  - Запись — стирание блоков (обычно 4 КБ) и программирование страниц по 256 байт, затем чтение и сверка
+in_dirizher:
+  - "Лезвие flashrom_spi; программатор задаётся в config.yaml (programmer: ch341a_spi или linux_spi:…)"
+  - "Опознание — flashrom без операции: только ID, ничего не читается и не пишется"
+  - "Копия «до» — два чтения подряд; Дирижёр сравнивает их SHA-256. Не совпали — запись заблокирована"
+  - "Запись — только после диагностики, плана и вашего слова «ДА»; затем Дирижёр читает чип сам и сверяет ещё раз"
+  - "Уникальные области платы (MAC, серийник) из профиля берутся с текущего чипа"
+plugin: flashrom_spi
+program: flashrom
+targets: [memory.spi_nor]
+adapters: [ch341a, adapter_18v, soic8_clip, soic8_socket, rpi_spi]
+lesson: first_chip
+install: sudo apt install flashrom
+examples:
+  - {title: Опознать, cmd: "flashrom -p ch341a_spi", note: "только ID — безопасно"}
+  - {title: Прочитать в файл, cmd: "flashrom -p ch341a_spi -r dump.bin"}
+  - {title: SPI самого Pi, cmd: "flashrom -p linux_spi:dev=/dev/spidev0.0,spispeed=8000 -r dump.bin"}
+  - {title: Через Дирижёр, cmd: "python3 -m dirizher run --dry-run", note: "копия, диагностика и план без записи"}
+drawings:
+  - type: chain
+    title: Как устроено в Дирижёре
+    steps:
+      - {title: Дирижёр, sub: "копия, сверка, «ДА»"}
+      - {title: flashrom_spi, sub: лезвие}
+      - {title: flashrom, sub: движок}
+      - {title: CH341A, sub: программатор}
+      - {title: Прищепка, sub: SOIC-8}
+      - {title: Флешка 25xx}
+caution:
+  - Чипы на 1,8 В (серии 25U, W25Q…FW) — только через переходник 1,8 В, иначе можно повредить
+  - Если найдено несколько определений с одним ID, flashrom берёт первое — сверка после записи покажет, подошло ли
+verify:
+  - "Разбор строки Found … flash chip и JEDEC ID в вашей версии flashrom (проверено только на подставной программе)"
+  - Время чтения и записи 8 МБ через CH341A

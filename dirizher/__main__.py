@@ -198,6 +198,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("skills", help="навыки: что загружено и что сломано")
     dr = sub.add_parser("doctor", help="самопроверка: копии, память, профили, навыки, Штурман")
     dr.add_argument("--heal", action="store_true", help="исправить то, что исправляется без догадок")
+    ca = sub.add_parser("catalog", help="справочник: движки (авторы, как работают) и переходники (как подключить)")
+    ca.add_argument("card", nargs="?", help="id карточки, например ch341a или flashrom")
+    ca.add_argument("--kind", choices=["engine", "adapter", "diy"], help="только движки, переходники или «собрать»")
     hp = sub.add_parser("help", help="справка: статьи и уроки (без слов — список)")
     hp.add_argument("words", nargs="*", help="поиск или имя статьи")
     sm = sub.add_parser("sim", help="управление виртуальной микросхемой (учебные поломки)")
@@ -219,9 +222,31 @@ def cmd_help(cfg, words: list) -> int:
     if not items:
         ui.info("ничего не нашлось")
     for it in items[:40]:
-        name = it["id"] if it["kind"] == "article" else f"(урок) {it['lesson']}"
+        name = {"article": it["id"], "card": f"catalog {it.get('card')}"}.get(it["kind"]) or f"(урок) {it.get('lesson')}"
         ui.out(f" • {it['title']}  [{name}]")
     ui.info("статья целиком: python3 -m dirizher help <имя>")
+    return 0
+
+
+def cmd_catalog(cfg, card_id, kind) -> int:
+    from .workshop import catalog
+    ui = ConsoleUI()
+    cards, errors = catalog.load(cfg)
+    if card_id:
+        card = catalog.get(cards, card_id)
+        if card is None:
+            ui.error(f"карточки «{card_id}» нет — список: python3 -m dirizher catalog")
+            return 1
+        ui.header(f"{card['title']} · {card['kind_title'].lower()}")
+        for line in catalog.text(card, cards):
+            ui.out(line)
+        return 0
+    ui.header("Справочник: движки и переходники")
+    for c in catalog.search(cards, "", kind or ""):
+        ui.out(f" • {c['id']:<15} {c['title']} · {c['group_title'].lower()} — {c['tagline']}")
+    for path, err in errors:
+        ui.warn(f"{path}: {err}")
+    ui.info("карточка целиком: python3 -m dirizher catalog <id>; с рисунками — в браузере, раздел «Справочник»")
     return 0
 
 
@@ -248,6 +273,8 @@ def main(argv=None) -> int:
         return doctor.main(cfg, sim=args.sim, do_heal=args.heal)
     if args.cmd == "help":
         return cmd_help(cfg, args.words)
+    if args.cmd == "catalog":
+        return cmd_catalog(cfg, args.card, args.kind)
     ui = ConsoleUI()
     c = Conductor(cfg, ui, sim=args.sim, dry_run=getattr(args, "dry_run", False))
     try:

@@ -1,0 +1,61 @@
+id: rpi_spi
+kind: adapter
+title: SPI самого Raspberry Pi (собрать)
+tagline: Без программатора — шесть проводов от гребёнки Pi к флешке 25xx
+group: diy
+icon: board
+voltage: "3,3 В (логика Raspberry Pi)"
+engines: [flashrom]
+needs: [soic8_clip]
+targets: [memory.spi_nor]
+what: >-
+  У Raspberry Pi есть своя шина SPI с логикой 3,3 В. Достаточно проводов «мама-мама» или прищепки —
+  и flashrom работает через linux_spi.
+steps:
+  - text: Включите SPI и перезагрузитесь.
+    code: sudo raspi-config     # Interface Options → SPI → Enable
+  - Выключите Pi. Подключите провода по рисунку — короткие, до 15 см.
+  - WP (вывод 3) и HOLD (вывод 7) чипа — к 3,3 В, иначе чип может не отвечать.
+  - text: Укажите программатор в config.yaml.
+    code: |
+      plugins:
+        flashrom_spi:
+          programmer: "linux_spi:dev=/dev/spidev0.0,spispeed=8000"
+  - text: Проверьте, что шина появилась.
+    code: ls /dev/spidev0.*
+check: "/dev/spidev0.0 есть, «Узнать, что за микросхема» находит чип."
+drawings:
+  - type: wiring
+    title: Провода
+    a_title: Raspberry Pi (вывод)
+    b_title: Флешка 25xx
+    wires:
+      - {a: "24 · CE0", b: "1 · CS", color: orange}
+      - {a: "21 · MISO", b: "2 · DO", color: green}
+      - {a: "17 · 3,3 В", b: "3 · WP", color: red, note: "WP к питанию"}
+      - {a: "25 · GND", b: "4 · GND", color: black, note: "подключайте первым"}
+      - {a: "19 · MOSI", b: "5 · DI", color: blue}
+      - {a: "23 · SCLK", b: "6 · CLK", color: yellow}
+      - {a: "17 · 3,3 В", b: "7 · HOLD", color: red, note: "HOLD к питанию"}
+      - {a: "17 · 3,3 В", b: "8 · VCC", color: red}
+  - type: header
+    title: "Гребёнка Raspberry Pi, 40 выводов (вывод 1 — квадратная площадка)"
+    count: 40
+    rows: 2
+    pins:
+      17: {label: "3,3 В", color: red, to: "VCC (8), WP (3), HOLD (7)"}
+      19: {label: MOSI, color: blue, to: "DI (5)"}
+      21: {label: MISO, color: green, to: "DO (2)"}
+      23: {label: SCLK, color: yellow, to: "CLK (6)"}
+      24: {label: CE0, color: orange, to: "CS (1)"}
+      25: {label: GND, color: black, to: "GND (4)"}
+  - type: package
+    title: "Флешка 25xx — вид сверху"
+    style: soic
+    pins: [CS, DO, WP, GND, DI, CLK, HOLD, VCC]
+    mark: {CS: orange, DO: green, WP: red, GND: black, DI: blue, CLK: yellow, HOLD: red, VCC: red}
+caution:
+  - "Только чипы на 3,3 В. На 5 В выводы Pi повреждаются, на 1,8 В — чип"
+  - Длинные провода дают разные чтения — уменьшите spispeed (например, 2000)
+verify:
+  - Стабильность чтения на ваших проводах и скорости spispeed

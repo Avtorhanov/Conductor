@@ -28,7 +28,8 @@ SIM_ACTIONS = ("status", "reset", "corrupt", "erase", "flaky", "steady")
 SNAPSHOT_KINDS = ("before", "after", "written")
 KIND_RU = {"run": "ремонт", "detect": "опознание", "rollback": "откат", "capture": "замер",
            "params": "параметры", "tune": "настройка"}
-HOOD_AREAS = ("guide", "work", "log", "dev", "device", "help")
+HOOD_AREAS = ("guide", "work", "log", "catalog", "dev", "device", "help")
+CATALOG_KINDS = ("engine", "adapter", "diy")
 SET_KEY = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
 SNAP_RU = {"before": "копия «до»", "after": "копия «после»", "written": "что записывали"}
 
@@ -61,6 +62,8 @@ ACTIONS = {
     "hood": {"job": False, "params": {"area"}, "title": "Капот"},
     "doctor": {"job": False, "params": set(), "title": "Самопроверка"},
     "fix": {"job": False, "params": {"session", "fix"}, "title": "Что помогло"},
+    # 0.5.0 — справочник движков и переходников
+    "catalog": {"job": False, "params": {"card", "kind"}, "title": "Справочник"},
 }
 PICK_PURPOSES = ("rollback", "feedback", "reference", "export")
 LESSON_GROUPS = ("work", "dev")
@@ -120,6 +123,10 @@ def _check_option(opt, where: str, g: dict, errors: list) -> None:
             errors.append(f"{where} «{opt['label']}»: article — имя статьи справки")
         if params.get("area") not in (None, *HOOD_AREAS):
             errors.append(f"{where} «{opt['label']}»: area — одно из {', '.join(HOOD_AREAS)}")
+        if "card" in params and not isinstance(params["card"], str):
+            errors.append(f"{where} «{opt['label']}»: card — id карточки справочника")
+        if params.get("kind") not in (None, *CATALOG_KINDS):
+            errors.append(f"{where} «{opt['label']}»: kind — одно из {', '.join(CATALOG_KINDS)}")
         if "set" in params and not isinstance(params["set"], dict):
             errors.append(f"{where} «{opt['label']}»: set — словарь «параметр: значение»")
 

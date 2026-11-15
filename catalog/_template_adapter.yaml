@@ -1,0 +1,51 @@
+# ШАБЛОН КАРТОЧКИ ПЕРЕХОДНИКА (что купить или собрать). Файлы на «_» не загружаются.
+# Новая карточка: «Справочник» → «+ Карточка» (конструктор с живым рисунком) или копия этого файла
+# в catalog/adapters/<id>.yaml. Распиновку берите из даташита и сверяйте на своём экземпляре.
+
+id: my_adapter
+kind: adapter
+title: "Название переходника"
+tagline: "Одна строка: для чего"
+group: buy                    # buy — купить; diy — собрать самому; mod — купить и доработать
+icon: usb                     # chip usb clip board probe cable socket scope code db wave plug
+voltage: "3.3 В"              # логика / питание
+usb: "1a86:5512"              # VID:PID из lsusb (если это USB-устройство)
+engines: [flashrom]           # с какими движками работает (id их карточек)
+needs: [soic8_clip]           # что ещё понадобится (id карточек переходников)
+targets: [memory.spi_nor]
+
+what: >-
+  Что это и когда нужно — 1–2 предложения.
+steps:                        # как подключить или собрать — по шагам
+  - Отключите питание устройства.
+  - text: Шаг с командой
+    code: lsusb
+    tip: Короткая подсказка к шагу
+check: Как убедиться, что всё работает (что увидеть на экране).
+drawings:
+  - type: wiring              # провода: a — вывод переходника, b — вывод устройства
+    title: Подключение
+    a_title: Переходник
+    b_title: Микросхема
+    wires:
+      - {a: CS, b: "1 CS", color: orange}
+      - {a: GND, b: "4 GND", color: black, note: "общий провод — первым"}
+  - type: package             # корпус сверху; подписи выводов по порядку с 1-го
+    title: Микросхема 25xx
+    style: soic               # soic или dip
+    pins: [CS, DO, WP, GND, DI, CLK, HOLD, VCC]
+    mark: {CS: orange, GND: black}
+  - type: header              # гребёнка: count выводов, rows 1 или 2 (в 2 ряда: нечётные сверху)
+    title: Разъём
+    count: 10
+    rows: 2
+    pins:
+      1: {label: MOSI, color: blue, to: "DI"}
+  - type: chain               # что к чему
+    steps: [Raspberry Pi, USB, Переходник, Микросхема]
+caution:
+  - Что опасно для микросхемы или переходника
+verify:                       # ПРОВЕРИТЬ НА ЖЕЛЕЗЕ
+  - Распиновку на вашем экземпляре
+links:
+  - {title: Даташит, url: "https://example.org"}

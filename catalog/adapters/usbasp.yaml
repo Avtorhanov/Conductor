@@ -1,0 +1,71 @@
+id: usbasp
+kind: adapter
+title: USBasp
+tagline: Недорогой USB-программатор AVR по ISP — ATmega, ATtiny, Arduino
+group: buy
+icon: usb
+voltage: "5 В (на многих есть перемычка 3,3 В)"
+usb: "16c0:05dc"
+engines: [avrdude]
+targets: [mcu.avr]
+lesson: tool_avr
+what: >-
+  Программатор с 10-выводным разъёмом ISP. К Arduino подключается к 6-выводному разъёму ICSP через
+  переходник 10→6 или проводами.
+steps:
+  - Правила udev — system/99-dirizher-tools.rules (как для ST-Link).
+  - Проверьте перемычку питания — 5 В для Arduino Uno, 3,3 В для плат на 3,3 В.
+  - Провода — по рисунку; стрелка или треугольник на разъёме — вывод 1.
+  - text: Скажите Дирижёру напряжение и модель.
+    code: |
+      plugins:
+        avrdude:
+          enabled: true
+          programmer: usbasp
+          part: m328p
+          programmer_voltage: 5.0
+  - text: Подпись — только чтение.
+    code: avrdude -c usbasp -p m328p -n
+check: "Подпись 1E 95 0F (ATmega328P); опознание в Дирижёре — ATmega328P."
+drawings:
+  - type: wiring
+    title: "USBasp (10 выводов) → Arduino ICSP (6 выводов)"
+    a_title: USBasp ISP-10
+    b_title: ICSP-6
+    wires:
+      - {a: "1 · MOSI", b: "4 · MOSI", color: blue}
+      - {a: "2 · VCC", b: "2 · VCC", color: red}
+      - {a: "4 · GND", b: "6 · GND", color: black}
+      - {a: "5 · RST", b: "5 · RESET", color: white}
+      - {a: "7 · SCK", b: "3 · SCK", color: yellow}
+      - {a: "9 · MISO", b: "1 · MISO", color: green}
+  - type: header
+    title: "Разъём ISP-10 (стрелка — вывод 1; нечётные сверху)"
+    count: 10
+    rows: 2
+    pins:
+      1: {label: MOSI, color: blue}
+      2: {label: VCC, color: red}
+      4: {label: GND, color: black}
+      5: {label: RST, color: white}
+      6: {label: GND, color: black}
+      7: {label: SCK, color: yellow}
+      8: {label: GND, color: black}
+      9: {label: MISO, color: green}
+      10: {label: GND, color: black}
+  - type: header
+    title: "Разъём ICSP-6 на Arduino"
+    count: 6
+    rows: 2
+    pins:
+      1: {label: MISO, color: green}
+      2: {label: VCC, color: red}
+      3: {label: SCK, color: yellow}
+      4: {label: MOSI, color: blue}
+      5: {label: RESET, color: white}
+      6: {label: GND, color: black}
+caution:
+  - "Старая прошивка USBasp ругается «cannot set sck period» — помогает медленная скорость (bitclock: 10)"
+  - Фьюзы Дирижёр не пишет — неверные фьюзы могут «закрыть» МК
+verify:
+  - Положение перемычки 5 / 3,3 В на вашем экземпляре

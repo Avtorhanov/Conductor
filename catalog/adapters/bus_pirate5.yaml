@@ -1,0 +1,66 @@
+id: bus_pirate5
+kind: adapter
+title: Bus Pirate 5
+tagline: EEPROM 24Cxx по I2C — сам питает чип, включает подтяжки и подписывает выводы на экране
+group: buy
+icon: board
+voltage: "1,2–5,5 В (регулируемое питание и буферы выводов)"
+engines: [buspirate]
+needs: [soic8_clip]
+targets: [memory.i2c_eeprom]
+lesson: tool_bp5
+what: >-
+  Прибор с экраном на RP2040. Подключается по USB как /dev/ttyACM0. Для 24Cxx нужны 4 провода и
+  перемычки адреса.
+steps:
+  - text: Подключите BP5 по USB. Права на порт — один раз.
+    code: sudo usermod -aG dialout $USER
+    tip: Затем выйдите из системы и войдите снова.
+  - Микросхему обесточьте от платы или выпаяйте. Провода — по рисунку; GND первым.
+  - A0, A1, A2 (выводы 1–3) — к GND, тогда адрес 0x50. WP (7) — к GND на время записи.
+  - text: Включите лезвие в config.yaml.
+    code: |
+      plugins:
+        bp5_i2c:
+          enabled: true
+          port: "/dev/ttyACM0"
+          eeprom: "24C02"
+          psu_voltage: 3.3
+          pullups: true
+  - text: Опознание — микросхема должна ответить по адресу 0x50.
+    code: python3 -m dirizher detect
+check: Экран BP5 показывает SDA и SCL на IO0 и IO1; опознание — «отвечает по адресу 0x50».
+drawings:
+  - type: wiring
+    title: Провода
+    a_title: Bus Pirate 5
+    b_title: EEPROM 24Cxx
+    wires:
+      - {a: "GND (10)", b: "4 · GND", color: black, note: первым}
+      - {a: "VOUT (1)", b: "8 · VCC", color: red, note: "psu_voltage: 3.3"}
+      - {a: "IO0 · SDA (2)", b: "5 · SDA", color: blue}
+      - {a: "IO1 · SCL (3)", b: "6 · SCL", color: yellow}
+      - {a: "GND", b: "1–3 · A0–A2", color: black, note: "адрес 0x50"}
+      - {a: "GND", b: "7 · WP", color: black, note: "запись разрешена"}
+  - type: header
+    title: "Разъём Bus Pirate 5, 10 выводов"
+    count: 10
+    rows: 1
+    pins:
+      1: {label: VOUT, color: red, to: "VCC (8)"}
+      2: {label: IO0 SDA, color: blue, to: "SDA (5)"}
+      3: {label: IO1 SCL, color: yellow, to: "SCL (6)"}
+      10: {label: GND, color: black, to: "GND (4), A0–A2, WP"}
+  - type: package
+    title: "EEPROM 24Cxx — вид сверху"
+    style: soic
+    pins: [A0, A1, A2, GND, SDA, SCL, WP, VCC]
+    mark: {A0: black, A1: black, A2: black, GND: black, SDA: blue, SCL: yellow, WP: black, VCC: red}
+caution:
+  - Если чип на плате питается от платы — psu_voltage 0 и programmer_voltage как у платы
+  - "WP на питании: запись не пройдёт сверку — Дирижёр предложит вернуть копию «до»"
+verify:
+  - Подписи выводов на экране BP5 в режиме I2C вашей прошивки
+  - Номер пункта I2C в меню m, вопросы после W 3.3
+links:
+  - {title: Описание прибора, url: "https://docs.buspirate.com"}

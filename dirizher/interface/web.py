@@ -35,7 +35,7 @@ from .. import __version__
 from ..core.pipeline import OUTCOMES, Conductor
 from ..core.storage import sha256
 from ..core.ui import ConsoleUI
-from ..workshop import doctor, helpdocs, skillmaker
+from ..workshop import catalog, doctor, helpdocs, skillmaker
 from ..workshop.hood import Hood, HoodError, classify
 from . import builder, guide
 
@@ -817,6 +817,60 @@ def api_help_new(h: Handler, q):
     rel = skillmaker.create_article(h.app.hood, str(body.get("id") or "").strip(), str(body.get("title") or ""),
                                     str(body.get("section") or "dev"), actor=actor(h))
     h.send_json({"ok": True, "open": rel, "id": Path(rel).stem})
+
+
+# ======================= справочник: движки и переходники =======================
+def _catalog(h: Handler, q) -> tuple:
+    cards, errors = catalog.load(h.app.cfg)
+    with h.app.conductor(_sim(q)) as c:
+        report = list(c.plugin_report)
+    return catalog.with_status(cards, report, sim=_sim(q)), errors, report
+
+
+@route("GET", "/api/catalog")
+def api_catalog(h: Handler, q):
+    cards, errors, report = _catalog(h, q)
+    shown = catalog.search(cards, q.get("q", "")[:100], q.get("kind", ""))
+    h.send_json({
+        "items": [catalog.public(c) for c in shown], "total": len(cards),
+        "errors": [{"path": p, "error": e} for p, e in errors],
+        "kinds": catalog.KINDS, "groups": catalog.GROUPS, "targets": catalog.TARGETS,
+        "colors": catalog.COLORS, "icons": list(catalog.ICONS), "overview": catalog.overview(cards),
+        "engines": [{"id": c["id"], "title": c["title"]} for c in cards if c["kind"] == "engine"],
+        "adapters": [{"id": c["id"], "title": c["title"]} for c in cards if c["kind"] == "adapter"],
+        "plugins": sorted(r["name"] for r in report if r["title"] != "ошибка загрузки"),
+        "hood": hood_state(h),
+    })
+
+
+@route("GET", "/api/catalog/card")
+def api_catalog_card(h: Handler, q):
+    cards, _, _ = _catalog(h, q)
+    card = catalog.get(cards, q.get("id", ""))
+    if card is None:
+        return h.fail(404, "нет такой карточки")
+    h.send_json({"card": catalog.public(card), "related": catalog.related(cards, card),
+                 "editable": bool(card["path"]) and classify(card["path"])[0] == "edit", "hood": hood_state(h)})
+
+
+@route("POST", "/api/catalog/preview")
+def api_catalog_preview(h: Handler, q):
+    h.send_json(catalog.preview(h.app.cfg, h.read_json().get("fields") or {}))
+
+
+@route("POST", "/api/catalog/new")
+def api_catalog_new(h: Handler, q):
+    need_hood(h)
+    body = h.read_json()
+    if body.get("template"):
+        rel = catalog.create_from_template(h.app.hood, str(body.get("kind") or ""), str(body.get("id") or "").strip(),
+                                           str(body.get("title") or ""), actor=actor(h))
+        cid = Path(rel).stem
+    else:
+        fields = body.get("fields") or {}
+        rel = catalog.create(h.app.hood, h.app.cfg, fields, actor=actor(h))
+        cid = Path(rel).stem
+    h.send_json({"ok": True, "id": cid, "open": rel})
 
 
 # ======================= мастерская: самопроверка =======================

@@ -1,0 +1,32 @@
+id: python
+kind: engine
+title: Python
+tagline: Язык, на котором написан Дирижёр — ядро, интерфейсы, помощники
+group: base
+icon: code
+since: "1991"
+lang: C
+license: PSF License (Python Software Foundation)
+authors:
+  - name: Guido van Rossum
+    role: создатель языка
+  - name: Python Software Foundation и сообщество
+    role: развитие языка и стандартной библиотеки
+links:
+  - {title: Сайт, url: "https://www.python.org"}
+what: >-
+  Язык программирования, который уже установлен в Raspberry Pi OS. Дирижёр использует только его
+  стандартную библиотеку и PyYAML — ставить почти ничего не нужно.
+strengths:
+  - Есть на любом Linux и Raspberry Pi из коробки
+  - Богатая стандартная библиотека — HTTP-сервер, SQLite, последовательный порт через termios, процессы
+  - Код легко читать и править прямо на приборе (капот)
+how:
+  - Интерпретатор выполняет файлы .py; модули подключаются при запуске
+in_dirizher:
+  - "Ядро, лезвия, веб-интерфейс (http.server) и помощники Bus Pirate и Modbus — только стандартная библиотека"
+  - Внешние программы запускаются отдельными процессами с таймаутом и журналом — их ошибки не роняют ядро
+  - Нужен Python 3.9 или новее
+targets: []
+examples:
+  - {title: Версия, cmd: "python3 --version"}

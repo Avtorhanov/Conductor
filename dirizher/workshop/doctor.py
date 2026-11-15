@@ -132,7 +132,16 @@ def check(cfg: dict, sim: bool = False, deep: bool = True, hood: Hood | None = N
             guide.load_guide()
         except Exception as e:
             issues.append(_file_issue(hood, "dirizher/interface/guide.yaml", "Штурман не загружается", str(e)[:400]))
-        # 7. второе место
+        # 7. справочник: карточки движков и переходников
+        from . import catalog
+        cards, card_errors = catalog.load(cfg)
+        for rel, err in card_errors:
+            issues.append(_file_issue(hood, rel, f"Карточка {Path(rel).name} не загружена", err))
+        for card in cards:
+            if card["warnings"]:
+                issues.append(_issue(f"card:{card['id']}", "info", f"Карточка «{card['title']}»: есть что дополнить",
+                                     "; ".join(card["warnings"]) + f" · {card['path']}"))
+        # 8. второе место
         if not cfg.get("mirror_dir"):
             issues.append(_issue("mirror", "info", "Второе место для копий выключено",
                                  "mirror_dir в config.yaml — флешка или SSD: без него испорченную копию не из чего "

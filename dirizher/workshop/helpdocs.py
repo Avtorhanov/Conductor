@@ -3,12 +3,13 @@
 Статья — Markdown с короткой шапкой:
     ---
     title: Капот
-    section: dev            # раздел интерфейса: guide | work | log | dev | device
+    section: dev            # раздел интерфейса: guide | work | log | catalog | dev | device
     tags: [код, правки]
     ---
     # Капот
     Текст…
 Значок «?» в каждом разделе открывает сначала статьи этого раздела.
+В поиске участвуют и карточки справочника (движки и переходники) — вид «card».
 """
 from __future__ import annotations
 
@@ -74,7 +75,7 @@ def _files(cfg) -> list:
     return out
 
 
-def articles(cfg, with_lessons: bool = True) -> list:
+def articles(cfg, with_lessons: bool = True, with_cards: bool = True) -> list:
     items = []
     for aid, path, source in _files(cfg):
         meta, body = parse(path.read_text(encoding="utf-8", errors="replace"))
@@ -83,6 +84,17 @@ def articles(cfg, with_lessons: bool = True) -> list:
                       "tags": [str(t) for t in tags] if isinstance(tags, list) else [str(tags)],
                       "summary": _summary(body), "source": source, "path": _rel(cfg, path),
                       "kind": "article", "_text": body})
+    if with_cards:
+        from . import catalog
+        try:
+            cards, _ = catalog.load(cfg)
+        except Exception:
+            cards = []
+        for card in cards:
+            items.append({"id": f"card.{card['id']}", "title": card["title"], "section": "catalog",
+                          "tags": [card["kind_title"].lower(), card["group_title"].lower()],
+                          "summary": card["tagline"], "source": f"справочник · {card['kind_title'].lower()}",
+                          "path": card["path"], "kind": "card", "card": card["id"], "_text": card["_text"]})
     if with_lessons:
         from ..interface import guide
         try:
@@ -105,13 +117,13 @@ def search(items: list, q: str = "", section: str = "") -> list:
         if all(w in hay for w in words):
             score = sum(3 for w in words if w in it["title"].lower())
             found.append((0 if section and it["section"] == section else 1,
-                          1 if it["kind"] == "lesson" else 0, -score, it["title"], it))
+                          {"article": 0, "card": 1}.get(it["kind"], 2), -score, it["title"], it))
     found.sort(key=lambda x: x[:4])
     return [{k: v for k, v in x[4].items() if k != "_text"} for x in found]
 
 
 def article(cfg, aid: str) -> dict | None:
-    for it in articles(cfg, with_lessons=False):
+    for it in articles(cfg, with_lessons=False, with_cards=False):
         if it["id"] == aid:
             text = it.pop("_text")
             return dict(it, text=text)

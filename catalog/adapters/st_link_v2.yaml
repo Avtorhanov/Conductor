@@ -1,0 +1,43 @@
+id: st_link_v2
+kind: adapter
+title: ST-Link V2 (клон)
+tagline: Отладчик SWD для STM32 и других ARM — 4 провода
+group: buy
+icon: probe
+voltage: "3,3 В"
+usb: "0483:3748"
+engines: [probe_rs, openocd]
+targets: [mcu.arm]
+lesson: tool_arm
+what: >-
+  Маленький USB-«свисток» с гребёнкой 10 выводов. Для чтения и записи МК достаточно SWDIO, SWCLK, GND и 3,3 В.
+steps:
+  - text: Правила udev для ST-Link — один раз.
+    code: |
+      sudo cp system/99-dirizher-tools.rules /etc/udev/rules.d/
+      sudo udevadm control --reload-rules && sudo udevadm trigger
+  - Найдите на плате разъём SWD (у Blue Pill — 4 штырька 3.3 / DIO / CLK / GND).
+  - Провода — по рисунку. Подписи выводов — на корпусе вашего ST-Link (у клонов они разные!).
+  - Питайте плату либо от ST-Link (3,3 В), либо от своего USB — не от двух сразу.
+  - text: Проверьте связь — только чтение.
+    code: probe-rs info --protocol swd
+check: "probe-rs list видит ST-Link; probe-rs info показывает ядро Cortex-M."
+drawings:
+  - type: wiring
+    title: Провода к STM32 (Blue Pill)
+    a_title: ST-Link V2
+    b_title: Плата STM32
+    wires:
+      - {a: GND, b: GND, color: black, note: первым}
+      - {a: SWDIO, b: "DIO · PA13", color: green}
+      - {a: SWCLK, b: "CLK · PA14", color: yellow}
+      - {a: "3.3V", b: "3.3", color: red, note: "если плата не питается сама"}
+      - {a: RST, b: NRST, color: white, note: "по желанию — для reset halt"}
+  - type: chain
+    steps: [Raspberry Pi, ST-Link, SWD, STM32]
+caution:
+  - "Защита чтения (RDP) снимается только стиранием — Дирижёр этого не делает"
+  - Неправильный провод питания (5 В на 3,3 В) может повредить МК — сверяйте подписи
+verify:
+  - Распиновку гребёнки вашего клона (подписи на корпусе)
+  - VID:PID в lsusb (у клонов бывает 0483:3748)

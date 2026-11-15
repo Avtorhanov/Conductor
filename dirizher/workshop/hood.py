@@ -2,6 +2,7 @@
 
 Править можно (когда капот открыт):
   навыки (skills/**), профили (profiles/**), справку (help/*.md), вопросы Штурмана (guide.yaml),
+  карточки справочника (catalog/**: движки и переходники — без слова подтверждения, они только описывают),
   лезвия (dirizher/plugins/*.py — кроме общих помощников _common.py и учебного симулятора).
 Только смотреть:
   ядро (dirizher/core/**) — порядок работы и защита; config.yaml; интерфейсы; помощники-процессы.
@@ -50,6 +51,7 @@ AREAS = {
     "dev": ("Навыки", ["skills/**/*", "profiles/**/*.yaml", "dirizher/core/skills.py"]),
     "device": ("Прибор", ["config.yaml", "dirizher/plugins/*.py", "dirizher/helpers/*.py"]),
     "help": ("Справка", ["help/*.md"]),
+    "catalog": ("Справочник", ["catalog/**/*.yaml", "skills/*/catalog/*.yaml", "dirizher/workshop/catalog.py"]),
 }
 HELP_FOR = {".py": "hood", ".md": "help_write"}
 
@@ -94,6 +96,8 @@ def classify(rel: str) -> tuple:
         return "edit", ""
     if parts[0] == "help" and len(parts) == 2 and pp.suffix == ".md":
         return "edit", ""
+    if parts[0] == "catalog" and pp.suffix in (".yaml", ".yml"):
+        return "edit", ""
     if rel == GUIDE:
         return "edit", ""
     if rel in VIEW_REASONS:
@@ -126,7 +130,8 @@ def needs_word(rel: str) -> bool:
     k = kind_of(rel)
     if k == "python":
         return True
-    return k == "yaml" and rel != GUIDE
+    from .catalog import is_card_path
+    return k == "yaml" and rel != GUIDE and not is_card_path(rel)
 
 
 class Hood:
@@ -250,9 +255,17 @@ class Hood:
                 res["errors"].append(f"YAML: {getattr(e, 'problem', None) or e}"
                                      + (f" (строка {mark.line + 1})" if mark else ""))
                 return res
+            from .catalog import check_text, is_card_path
             if rel == GUIDE:
                 from ..interface import guide
                 res["errors"] += guide.validate(data)
+            elif is_card_path(rel):
+                if PurePosixPath(rel).name.startswith("_"):
+                    res["hints"].append("шаблон: не загружается, им пользуется «+ Карточка»")
+                else:
+                    card = check_text(self.cfg, rel, text)
+                    for key in ("errors", "warnings", "hints"):
+                        res[key] += card[key]
             elif parts[0] == "skills" and parts[-1] == "skill.yaml":
                 res["errors"] += validate_manifest(data, parts[1])
                 if not res["errors"] and not (data.get("settings") or {}).get("enabled", False):

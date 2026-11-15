@@ -1,0 +1,48 @@
+id: arduino_isp
+kind: adapter
+title: Arduino как программатор AVR (собрать)
+tagline: Нет USBasp? Arduino Uno со скетчем ArduinoISP прошьёт и прочитает другой AVR
+group: diy
+icon: board
+voltage: "5 В"
+engines: [avrdude]
+targets: [mcu.avr]
+lesson: tool_avr
+what: >-
+  Скетч ArduinoISP из примеров Arduino IDE превращает Uno в программатор STK500. Нужны 6 проводов
+  и конденсатор 10 мкФ.
+steps:
+  - "Arduino IDE → Файл → Примеры → ArduinoISP. Загрузите скетч в Uno-программатор."
+  - После загрузки поставьте конденсатор 10 мкФ между RESET и GND программатора (минус — к GND), чтобы Uno не перезагружался.
+  - Подключите провода по рисунку к целевому AVR (или к его разъёму ICSP).
+  - text: Настройки лезвия — порт программатора и скорость 19200.
+    code: |
+      plugins:
+        avrdude:
+          enabled: true
+          programmer: stk500v1
+          port: /dev/ttyACM0
+          part: m328p
+          extra_args: ["-b", "19200"]
+          programmer_voltage: 5.0
+  - text: Подпись цели — только чтение.
+    code: avrdude -c stk500v1 -P /dev/ttyACM0 -b 19200 -p m328p -n
+check: Подпись цели читается; светодиод «heartbeat» на выводе 9 программатора мигает (если подключён).
+drawings:
+  - type: wiring
+    title: Провода
+    a_title: Uno-программатор
+    b_title: Целевой AVR (ICSP)
+    wires:
+      - {a: D13, b: SCK, color: yellow}
+      - {a: D12, b: MISO, color: green}
+      - {a: D11, b: MOSI, color: blue}
+      - {a: D10, b: RESET, color: white, note: "RESET цели, не программатора"}
+      - {a: 5V, b: VCC, color: red}
+      - {a: GND, b: GND, color: black}
+  - type: chain
+    steps: [Raspberry Pi, "USB → Uno (ArduinoISP)", 6 проводов, Целевой AVR]
+caution:
+  - Без конденсатора на RESET программатора avrdude перезагрузит Uno вместо программирования цели
+verify:
+  - Имя программатора в вашей версии avrdude (stk500v1 или arduino_as_isp) и скорость 19200

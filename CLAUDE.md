@@ -24,6 +24,8 @@
 - `dirizher/core/params.py` — карта параметров; `Conductor.read_params/tune` — сценарий «Настройка».
 - `dirizher/core/skills.py` — навыки `skills/<id>/` и сторож кода; образец навыка — `skills/modbus_rtu/`.
 - `dirizher/workshop/` — капот (`hood.py`), навыки из шаблонов, справка (`help/*.md`), самопроверка (`doctor.py`).
+- `dirizher/workshop/catalog.py` + `catalog/engines|adapters/*.yaml` — справочник: движки (авторы, лицензии, принцип) и переходники (рисунки — данными: wiring, package, header, chain). Навык может принести карточки в `skills/<id>/catalog/`.
+- `tools/build_pages.py` + `tools/pages_demo.js` — демо для GitHub Pages: записывает ходы настоящего ядра на симуляторе; публикует `.github/workflows/pages.yml`.
 - `dirizher/interface/` — слой поверх ядра: `guide.yaml` + `guide.py` (Штурман: вопросы, подсказки, уроки), `web.py` + `static/index.html` (браузер), `wizard.py` (терминал), `builder.py` (конструктор профиля). Ядро о нём не знает: интерфейс подставляет свой `ui`.
 
 ## Жёсткие правила

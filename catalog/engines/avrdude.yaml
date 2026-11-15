@@ -1,0 +1,51 @@
+id: avrdude
+kind: engine
+title: AVRDUDE
+tagline: Читает и пишет AVR-микроконтроллеры — ATmega, ATtiny, Arduino — flash и EEPROM
+group: tool
+icon: chip
+lang: C
+license: GPL-2.0
+authors:
+  - name: Brian S. Dean
+    role: автор — начинал как AVRPROG для FreeBSD, затем переименовал в AVRDUDE
+  - name: Jörg Wunsch
+    role: сопровождающий с 2006 года
+  - name: Ted Roth, Eric Weddington
+    role: перенос на Linux и Windows
+  - name: Команда avrdudes
+    role: с 2022 года проект живёт на GitHub
+links:
+  - {title: Исходный код, url: "https://github.com/avrdudes/avrdude"}
+  - {title: Документация, url: "https://avrdudes.github.io/avrdude/"}
+what: >-
+  Программа загрузки и выгрузки памяти AVR: забирает из микроконтроллера программу (flash) и настройки
+  (EEPROM) и записывает их обратно. Её же вызывает Arduino IDE, когда вы нажимаете «Загрузить».
+strengths:
+  - Десятки программаторов — USBasp, AVRISP, STK500, Arduino как ISP, SerialUPDI, Atmel-ICE
+  - Знает все семейства AVR, включая новые с интерфейсом UPDI
+  - Проверена миллионами загрузок Arduino; есть в пакетах Debian
+how:
+  - "ISP: программатор держит RESET в нуле и по SPI (MOSI, MISO, SCK) включает режим программирования"
+  - "Читает подпись — 3 байта: по ней видно модель (ATmega328P — 1E 95 0F)"
+  - Читает или пишет flash страницами и EEPROM; перед записью flash делает стирание всего чипа (chip erase)
+in_dirizher:
+  - "Лезвие avrdude: образ = flash + EEPROM. Стирание перед записью задевает EEPROM, поэтому EEPROM входит в копию «до» и в сверку"
+  - "В профиле ATmega328P EEPROM помечена preserve — настройки устройства берутся с текущего чипа"
+  - "Фьюзы и lock-биты не читаются в образ и никогда не пишутся. Запрещены -u, -F, -D, -e, -t и любые -U в extra_args"
+  - "USBasp обычно 5 В — у лезвия своё напряжение: programmer_voltage: 5.0"
+plugin: avrdude
+program: avrdude
+targets: [mcu.avr]
+adapters: [usbasp, arduino_isp]
+lesson: tool_avr
+install: sudo apt install avrdude
+examples:
+  - {title: Подпись (только чтение), cmd: "avrdude -c usbasp -p m328p -n"}
+  - {title: Прочитать flash, cmd: "avrdude -c usbasp -p m328p -U flash:r:flash.bin:r"}
+caution:
+  - Неверные фьюзы могут «закрыть» микроконтроллер — поэтому Дирижёр их не пишет совсем
+  - Хвост flash из 0xFF avrdude не сохраняет — лезвие само дополняет образ до полного размера
+verify:
+  - Строка подписи (6.x — 0x1e950f, 7–8.x — 1E 95 0F)
+  - Срезание хвоста 0xFF при чтении flash в вашей версии

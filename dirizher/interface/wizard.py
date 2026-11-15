@@ -146,6 +146,8 @@ class Wizard:
             return self.tune_form(params.get("session"))
         if name == "fix":
             return self.fix(params.get("session"), params.get("fix"))
+        if name == "catalog":
+            return self.catalog(params.get("card"), params.get("kind"))
         meta = guide.ACTIONS[name]
         if meta.get("pick") and "session" not in params:
             sid = self.pick(meta["pick"])
@@ -211,9 +213,36 @@ class Wizard:
                 self.ui.out("   " + line)
             self.ui.pause("Enter — назад…")
             return None
-        items = [i for i in helpdocs.search(helpdocs.articles(self.cfg, with_lessons=False))]
+        items = [i for i in helpdocs.search(helpdocs.articles(self.cfg, with_lessons=False, with_cards=False))]
         idx = self.ui.choose("Справка (Enter — назад)", [i["title"] for i in items])
         return None if idx is None else self.help(items[idx]["id"])
+
+    def catalog(self, card_id: str | None = None, kind: str | None = None):
+        """Справочник в терминале: список → карточка с рисунками строками."""
+        from ..workshop import catalog
+        cards, errors = catalog.load(self.cfg)
+        if card_id:
+            card = catalog.get(cards, card_id)
+            if card is None:
+                self.ui.warn(f"карточки «{card_id}» нет")
+                return None
+            self.ui.header(f"{card['title']} · {card['kind_title'].lower()}")
+            for line in catalog.text(card, cards):
+                self.ui.out("   " + line if line else "")
+            rel = catalog.related(cards, card)["items"]
+            opts = [{"label": f"{r['title']} — {r['tagline']}", "action": "catalog", "params": {"card": r["id"]}}
+                    for r in rel]
+            if card.get("lesson"):
+                lesson = (self.g.get("lessons") or {}).get(card["lesson"])
+                if lesson:
+                    opts.append({"label": f"Урок: {lesson['title']}", "lesson": card["lesson"]})
+            return self.then(opts, "Дальше (Enter — назад):") if opts else self.ui.pause("Enter — назад…")
+        shown = catalog.search(cards, "", kind or "")
+        for path, err in errors:
+            self.ui.error(f"{path}: {err}")
+        idx = self.ui.choose("Справочник: движки и переходники (Enter — назад)",
+                             [f"{c['title']} · {c['group_title'].lower()} — {c['tagline']}" for c in shown])
+        return None if idx is None else self.catalog(shown[idx]["id"])
 
     def hood(self):
         self.ui.info("капот (правка кода с проверкой и историей) — в браузере: python3 -m dirizher web, кнопка </>")
