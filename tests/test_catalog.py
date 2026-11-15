@@ -322,7 +322,7 @@ class InterfaceTests(Base):
         for marker in (b'data-tab="catalog"', b"function renderCatalog", b"function drawWiring", b"function drawPackage",
                        b"function drawHeader", b"function renderCardBuilder", b"function renderCatalogMap"):
             self.assertIn(marker, body)
-        self.assertIn(b"repeat(6, 1fr)", body)
+        self.assertIn(b"repeat(6, minmax(0, 1fr))", body)
 
     def test_wizard_and_cli(self):
         ui = AutoUI([None])
