@@ -16,7 +16,8 @@ import re
 from ..core.skills import ID_RE, KINDS
 from .hood import HoodError
 
-SECTIONS = {"guide": "Штурман", "work": "Работа", "log": "Журнал", "dev": "Навыки", "device": "Прибор"}
+SECTIONS = {"guide": "Штурман", "work": "Работа", "log": "Журнал", "catalog": "Справочник", "dev": "Навыки",
+            "device": "Прибор"}
 
 MANIFEST = """\
 # Паспорт навыка «{title}». Справка — help.md рядом, статья «Навыки».

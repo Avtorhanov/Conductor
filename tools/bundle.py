@@ -11,8 +11,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT = "dirizher_code.txt"
-PATTERNS = ["*.py", "*.yaml", "*.rules", "*.html", "*.service", "*.sh", "requirements.txt", ".gitignore"]
-SKIP_DIRS = {"data", "__pycache__", ".git", "docs"}
+PATTERNS = ["*.py", "*.yaml", "*.yml", "*.js", "*.rules", "*.html", "*.service", "*.sh", "requirements.txt", ".gitignore"]
+SKIP_DIRS = {"data", "__pycache__", ".git", "docs", "_site"}
 
 
 def collect() -> list:

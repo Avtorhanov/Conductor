@@ -1,0 +1,29 @@
+id: sqlite
+kind: engine
+title: SQLite
+tagline: Память Дирижёра — сеансы, события, снимки, эталоны, «что помогло»
+group: base
+icon: db
+since: "2000"
+lang: C
+license: Общественное достояние (public domain)
+authors:
+  - name: D. Richard Hipp
+    role: автор
+  - name: Команда SQLite
+    role: сопровождение
+links:
+  - {title: Сайт, url: "https://sqlite.org"}
+what: >-
+  База данных в одном файле. Ничего не нужно устанавливать и запускать отдельно — Python умеет с ней работать сам.
+strengths:
+  - Один файл data/memory.sqlite — легко скопировать на флешку
+  - Надёжные транзакции — запись либо целиком, либо никак
+  - Встроена в Python (модуль sqlite3)
+how:
+  - Данные хранятся в таблицах; изменения записываются транзакциями
+in_dirizher:
+  - "Таблицы sessions, events, snapshots, refs, recipe_stats, fixes"
+  - "Самопроверка запускает PRAGMA integrity_check"
+  - Сами дампы лежат не в базе, а файлами по SHA-256 — база хранит только ссылки
+targets: []

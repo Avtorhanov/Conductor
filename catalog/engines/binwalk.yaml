@@ -1,0 +1,44 @@
+id: binwalk
+kind: engine
+title: binwalk
+tagline: Показывает, что лежит внутри дампа — загрузчик, ядро, файловая система
+group: tool
+icon: db
+since: "2010"
+lang: "Rust (v3), Python (v2)"
+license: MIT
+authors:
+  - name: Craig Heffner
+    role: автор — сделал для разбора прошивок роутеров
+  - name: ReFirmLabs
+    role: проект сейчас; в 2024 году вышла переписанная на Rust версия 3
+links:
+  - {title: Исходный код, url: "https://github.com/ReFirmLabs/binwalk"}
+what: >-
+  Ищет внутри файла знакомые сигнатуры: заголовки загрузчика (uImage), сжатые данные (LZMA, gzip),
+  файловые системы (SquashFS). По ним видно, цела ли прошивка, даже без эталона.
+strengths:
+  - Сотни сигнатур — заголовки, архивы, файловые системы, сертификаты
+  - Анализ энтропии подсказывает, где данные сжаты или зашифрованы
+  - Работает только с файлом — железо не нужно и не затрагивается
+how:
+  - Проходит файл и ищет «магические» байты известных форматов
+  - Проверяет найденный заголовок (длины, поля) и печатает смещение и описание
+in_dirizher:
+  - "Проверка binwalk — сведения о структуре дампа в диагностике (info)"
+  - "Проверка binwalk_expect — неисправность, если нет ожидаемой сигнатуры; Дирижёр предложит восстановление"
+  - Работает с копией дампа во временной папке — сама копия «до» не меняется
+program: binwalk
+targets: [dump]
+lesson: dev_binwalk_expect
+install: "sudo apt install binwalk   # 2.x; версия 3: cargo install binwalk"
+examples:
+  - {title: Что внутри, cmd: "binwalk dump.bin"}
+  - title: Ожидаемые сигнатуры в профиле платы
+    cmd: "checks: [{type: binwalk_expect, expect: [\"uImage header\", \"Squashfs filesystem\"]}]"
+drawings:
+  - type: chain
+    title: Где работает
+    steps: [Копия «до», binwalk, Находки диагностики, План ремонта]
+verify:
+  - Точные названия сигнатур — из вывода binwalk на исправном дампе этой платы

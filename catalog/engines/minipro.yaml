@@ -1,0 +1,49 @@
+id: minipro
+kind: engine
+title: minipro
+tagline: Открытая программа для программаторов XGecu T48 / TL866II+ — память в панельке
+group: tool
+icon: socket
+since: "2014"
+lang: C
+license: GPL-3.0
+authors:
+  - name: Valentin Dudouyt
+    role: автор (2014)
+  - name: David Griffith
+    role: координирует разработку
+  - name: Участники проекта
+    role: поддержка новых программаторов и тысяч микросхем
+links:
+  - {title: Исходный код, url: "https://gitlab.com/DavidGriffith/minipro"}
+what: >-
+  Фирменная программа для программаторов XGecu есть только под Windows. minipro — свободная замена для Linux:
+  читает и пишет микросхемы памяти, вставленные в панель ZIF.
+strengths:
+  - Работает на Raspberry Pi и любом Linux без Windows
+  - Огромная база микросхем — EEPROM 24/93, флешки 25, параллельные 27/28/29/39
+  - Проверяет ID микросхемы перед работой; защита программатора от перегрузки по току
+  - Простая командная строка — легко вызывать из Дирижёра
+how:
+  - Микросхема вставляется в панель ZIF; модель задаётся точным именем из базы (minipro -L <часть имени>)
+  - Программатор подаёт нужные напряжения и протокол из базы
+  - "-D — только ID; -r — чтение в файл; -w — запись (minipro сам стирает и сверяет)"
+in_dirizher:
+  - "Лезвие minipro; device — точное имя из minipro -L. Класс (24C…, 25…) определяется по имени"
+  - "Запрещены -y (неверный ID), -s/-S (неверный размер), без сверки, -E, фьюзы и lock"
+  - Микроконтроллеры через minipro не обслуживаются — стирание задело бы EEPROM и фьюзы (для AVR есть avrdude)
+plugin: minipro
+program: minipro
+targets: [memory.parallel, memory.i2c_eeprom, memory.spi_nor]
+adapters: [t48, soic8_socket]
+lesson: tool_minipro
+install: "sudo apt install build-essential pkg-config git libusb-1.0-0-dev && git clone https://gitlab.com/DavidGriffith/minipro.git && cd minipro && make && sudo make install"
+examples:
+  - {title: Найти имя в базе, cmd: "minipro -L 24C02"}
+  - {title: Только ID, cmd: "minipro -p W25Q64BV -D"}
+  - {title: Прочитать, cmd: "minipro -p AT24C02 -r eeprom.bin"}
+caution:
+  - Вставляйте микросхему строго по рисунку для этой модели и корпуса — неправильное положение повреждает чип
+verify:
+  - "Строка Chip ID: 0x… OK и текст при несовпадении ID"
+  - Ответ на -D для микросхем без ID

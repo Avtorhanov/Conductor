@@ -1,0 +1,47 @@
+id: sigrok
+kind: engine
+title: sigrok (sigrok-cli)
+tagline: Логический анализатор — смотрит, что происходит на проводах, ничего не посылая
+group: tool
+icon: scope
+since: "2010"
+lang: C, Python (декодеры)
+license: GPL-3.0 или новее
+authors:
+  - name: Uwe Hermann
+    role: начал проект flosslogic в 2010 году (он же — один из ранних авторов flashrom)
+  - name: Bert Vermeulen
+    role: соавтор — проекты объединились в sigrok
+  - name: Joel Holdsworth
+    role: автор графической программы PulseView
+  - name: Сообщество sigrok
+    role: драйверы приборов и декодеры протоколов; открытая прошивка fx2lafw
+links:
+  - {title: Сайт и вики, url: "https://sigrok.org"}
+what: >-
+  Набор программ для логических анализаторов, осциллографов и мультиметров. Записывает сигналы
+  и расшифровывает протоколы — SPI, I2C, UART и сотню других.
+strengths:
+  - Работает с дешёвыми 8-канальными анализаторами (открытая прошивка fx2lafw)
+  - Больше сотни декодеров протоколов — от SPI до флеш-команд
+  - Только приём сигналов — безопасно для устройства
+how:
+  - Драйвер прибора записывает уровни на каналах с заданной частотой
+  - Декодер превращает уровни в байты протокола (например, SPI), следующий — в команды флешки
+in_dirizher:
+  - "Не лезвие, а отдельный замер: python3 -m dirizher.extras.sigrok и действие «замер» в браузере"
+  - "Пример: при включении устройства читает ли процессор флешку — значит, флешка и прищепка не виноваты"
+  - "Запись .sr и расшифровка .txt — в data/captures/, сеанс вида «замер» — в журнале"
+program: sigrok-cli
+targets: [signals]
+adapters: [logic_analyzer]
+lesson: tool_sigrok
+install: sudo apt install sigrok-cli
+examples:
+  - {title: Найти анализатор, cmd: "python3 -m dirizher.extras.sigrok --scan"}
+  - title: Замер SPI 2 секунды
+    cmd: "python3 -m dirizher.extras.sigrok --channels D0,D1,D2,D3 --samplerate 1m --time 2000 --decode \"spi:clk=D0:mosi=D1:miso=D2:cs=D3\" --annotation spi"
+caution:
+  - Входы дешёвых анализаторов — не выше 5 В; общий провод подключайте первым
+verify:
+  - Драйвер вашего анализатора и синтаксис декодера (sigrok-cli -P spi --show)

@@ -1,0 +1,37 @@
+id: logic_analyzer
+kind: adapter
+title: Логический анализатор 8 каналов (fx2lafw)
+tagline: Посмотреть, читает ли процессор флешку — только слушает, ничего не пишет
+group: buy
+icon: scope
+voltage: "входы до 5 В"
+usb: "0925:3881, 1d50:608c"
+engines: [sigrok]
+targets: [signals]
+lesson: tool_sigrok
+what: >-
+  Недорогой 8-канальный анализатор на 24 МГц («клон Saleae»). sigrok загружает в него открытую прошивку
+  fx2lafw — и записывает уровни на проводах.
+steps:
+  - Правила udev — system/99-dirizher-tools.rules.
+  - Устройство выключено. GND анализатора — к GND платы (первым).
+  - Каналы — к выводам флешки по рисунку, прищепкой или крючками.
+  - text: Найдите анализатор.
+    code: python3 -m dirizher.extras.sigrok --scan
+  - Запустите замер и включите устройство — в расшифровке появятся команды чтения флешки.
+check: "В расшифровке SPI видны команды 03 (READ) или 0B (FAST READ) сразу после включения."
+drawings:
+  - type: wiring
+    title: Замер SPI-флешки при включении
+    a_title: Анализатор
+    b_title: Флешка 25xx
+    wires:
+      - {a: GND, b: "4 · GND", color: black, note: первым}
+      - {a: "CH1 · D0", b: "6 · CLK", color: yellow}
+      - {a: "CH2 · D1", b: "5 · DI (MOSI)", color: blue}
+      - {a: "CH3 · D2", b: "2 · DO (MISO)", color: green}
+      - {a: "CH4 · D3", b: "1 · CS", color: orange}
+caution:
+  - Не выше 5 В на входах; на платах с высоким напряжением — только через делитель
+verify:
+  - "Подпись каналов вашего анализатора (CH1…CH8 или D0…D7) и драйвер (fx2lafw)"

@@ -1,0 +1,28 @@
+id: pyyaml
+kind: engine
+title: PyYAML
+tagline: Читает YAML — профили, навыки, Штурман, карточки этого справочника
+group: base
+icon: code
+lang: Python, C
+license: MIT
+authors:
+  - name: Kirill Simonov
+    role: автор
+  - name: Сообщество YAML (yaml.org)
+    role: сопровождение
+links:
+  - {title: Исходный код, url: "https://github.com/yaml/pyyaml"}
+what: >-
+  Библиотека для формата YAML — простого текста «ключ: значение», который удобно писать руками.
+  Вся база знаний Дирижёра — YAML-файлы.
+strengths:
+  - Профиль чипа или карточку можно написать в любом редакторе и понять без программирования
+  - safe_load читает только данные — файл не может выполнить код
+how:
+  - Текст YAML превращается в словари и списки Python
+in_dirizher:
+  - Единственная внешняя библиотека ядра (requirements.txt)
+  - "Профили, навыки, guide.yaml и карточки читаются через yaml.safe_load и проверяются до использования"
+targets: []
+install: sudo apt install python3-yaml

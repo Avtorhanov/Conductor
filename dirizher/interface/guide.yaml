@@ -61,6 +61,10 @@ nodes:
         label: Подключить инструмент
         explain: Bus Pirate 5, ST-Link, T48, USBasp, ESP, логический анализатор
         next: tools
+      - icon: "🧰"
+        label: "Справочник: что купить или собрать"
+        explain: переходники с рисунками подключения, движки и их авторы
+        action: catalog
       - icon: "🎓"
         label: Потренироваться без железа
         explain: виртуальная микросхема с учебными поломками
@@ -184,6 +188,14 @@ nodes:
     ask: Что подключаете?
     say: Каждый инструмент — отдельное «лезвие». Новые выключены, пока вы не включите их в config.yaml. Порядок первого раза везде один — опознание, план без записи, эталон с исправного устройства.
     options:
+      - label: Какой переходник нужен — карточки с рисунками
+        explain: что купить, как подключить, какие выводы куда
+        action: catalog
+        params: {kind: adapter}
+      - label: Собрать переходник самому
+        explain: SPI самого Raspberry Pi, Pico как отладчик, Arduino как программатор
+        action: catalog
+        params: {kind: diy}
       - label: SPI-флешка 25xx (роутеры, ТВ, материнские платы)
         explain: CH341A или SPI самого Raspberry Pi — flashrom
         lesson: first_chip
@@ -299,6 +311,9 @@ lessons:
       - Затем «Снять копию с исправного устройства». Формат ответов BP5 проверен только на эмуляторе (ПРОВЕРИТЬ НА ЖЕЛЕЗЕ).
     check: Журнал сеанса — строки помощника bp5_i2c (FOUND, READ 256). Если микросхема молчит — проверьте подтяжки и питание.
     related:
+      - label: "Схема подключения Bus Pirate 5"
+        action: catalog
+        params: {card: bus_pirate5}
       - label: Узнать, что за микросхема
         action: detect
       - label: Все карточки инструментов
@@ -325,6 +340,12 @@ lessons:
       - Если чтение не проходит из-за защиты (RDP) — Дирижёр её не снимает. Снятие стирает прошивку, а обход защит — вне задач проекта.
     check: «Узнать, что за микросхема» → «модель из настроек, Cortex-M3». Форматы вывода — ПРОВЕРИТЬ НА ЖЕЛЕЗЕ.
     related:
+      - label: "Схема подключения ST-Link"
+        action: catalog
+        params: {card: st_link_v2}
+      - label: "Отладчик из Raspberry Pi Pico"
+        action: catalog
+        params: {card: pico_probe}
       - label: Узнать, что за микросхема
         action: detect
       - label: Все карточки инструментов
@@ -351,6 +372,9 @@ lessons:
       - Микроконтроллеры через minipro Дирижёр не обслуживает — стирание заденет EEPROM и фьюзы.
     check: «Узнать, что за микросхема» → ID из панельки. Текст minipro — ПРОВЕРИТЬ НА ЖЕЛЕЗЕ.
     related:
+      - label: "Карточка T48 / TL866II+"
+        action: catalog
+        params: {card: t48}
       - label: Узнать, что за микросхема
         action: detect
       - label: Все карточки инструментов
@@ -377,6 +401,12 @@ lessons:
       - Подпись 0x000000 или 0xFFFFFF — нет связи — проверьте RESET, питание и кварц; попробуйте bitclock 10.
     check: «Узнать, что за микросхема» → «подпись 0x1E950F». Строку avrdude — ПРОВЕРИТЬ НА ЖЕЛЕЗЕ.
     related:
+      - label: "Схема подключения USBasp"
+        action: catalog
+        params: {card: usbasp}
+      - label: "Arduino как программатор"
+        action: catalog
+        params: {card: arduino_isp}
       - label: Узнать, что за микросхема
         action: detect
       - label: Все карточки инструментов
@@ -399,6 +429,9 @@ lessons:
       - В отпечаток входит MAC — откат возможен только на ту же плату. При шифровании флеша эталон с другой платы не поможет.
     check: «Узнать, что за микросхема» → чип, MAC и размер флеша. Строки esptool — ПРОВЕРИТЬ НА ЖЕЛЕЗЕ.
     related:
+      - label: "Схема подключения USB-UART"
+        action: catalog
+        params: {card: usb_uart}
       - label: Узнать, что за микросхема
         action: detect
       - label: Все карточки инструментов
@@ -423,6 +456,9 @@ lessons:
       - Нажмите «Записать сигналы» и включите устройство. Запись и расшифровка сохранятся в data/captures/.
     check: В расшифровке SPI команды 03 или 0B — процессор читает флеш. Тишина — проблема раньше флеша (питание, кварц).
     related:
+      - label: "Схема подключения анализатора"
+        action: catalog
+        params: {card: logic_analyzer}
       - label: Найти анализатор
         action: capture
         params: {scan: true}
@@ -580,6 +616,12 @@ lessons:
         code: python3 -m dirizher run --dry-run --label "донор-1"
     check: Журнал → сеанс «опознание» → строка flashrom «Found … flash chip». Если она есть — подключение работает.
     related:
+      - label: "Переходник: CH341A"
+        action: catalog
+        params: {card: ch341a}
+      - label: "Без программатора: SPI самого Raspberry Pi"
+        action: catalog
+        params: {card: rpi_spi}
       - label: Узнать, что за микросхема
         action: detect
 

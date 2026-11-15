@@ -1,0 +1,40 @@
+id: usb_uart
+kind: adapter
+title: USB-UART (CP2102, CH340, FT232)
+tagline: Связь с ESP8266/ESP32 по последовательному порту — для esptool
+group: buy
+icon: cable
+voltage: "3,3 В логика (только!)"
+engines: [esptool]
+targets: [mcu.esp]
+lesson: tool_esp
+what: >-
+  Переходник USB → последовательный порт. На платах разработчика (ESP32 DevKit, NodeMCU) он уже стоит —
+  тогда хватит обычного USB-кабеля. Для голого модуля — 4 провода и кнопка BOOT.
+steps:
+  - text: Плата разработчика — просто подключите USB и проверьте порт.
+    code: ls /dev/ttyUSB* /dev/ttyACM*
+  - text: Права на порт — один раз.
+    code: sudo usermod -aG dialout $USER
+  - "Голый модуль: провода по рисунку, TX к RX и RX к TX (накрест)."
+  - "Вход в загрузчик вручную: держите GPIO0 на GND (кнопка BOOT), коротко замкните EN на GND (RESET), отпустите BOOT."
+  - text: Проверьте — только чтение.
+    code: esptool --port /dev/ttyUSB0 flash_id
+check: "flash_id показывает чип, MAC и Detected flash size."
+drawings:
+  - type: wiring
+    title: Провода к модулю ESP32
+    a_title: USB-UART
+    b_title: Модуль ESP
+    wires:
+      - {a: GND, b: GND, color: black, note: первым}
+      - {a: TX, b: "RX0 (U0RXD)", color: green, note: накрест}
+      - {a: RX, b: "TX0 (U0TXD)", color: yellow, note: накрест}
+      - {a: "3,3 В*", b: "3V3", color: red, note: "* лучше отдельный источник"}
+      - {a: "кнопка → GND", b: GPIO0, color: white, note: "BOOT: держать при сбросе"}
+      - {a: "кнопка → GND", b: EN, color: gray, note: "RESET"}
+caution:
+  - Только 3,3 В на линиях. Переключатель 5 В на переходнике — в положение 3,3 В
+  - "ESP потребляет до сотен миллиампер в пиках — слабый вывод 3,3 В переходника даёт сбои; лучше отдельный стабилизатор"
+verify:
+  - Вывод загрузчика у вашего чипа (у ESP32-C3/S3 другие выводы режима загрузки — см. даташит)

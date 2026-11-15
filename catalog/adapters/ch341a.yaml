@@ -1,0 +1,49 @@
+id: ch341a
+kind: adapter
+title: CH341A (USB-программатор)
+tagline: Самый доступный программатор SPI-флешек 25xx — с панелькой и прищепкой
+group: buy
+icon: usb
+voltage: "3,3 В (проверьте свой экземпляр — см. «Осторожно»)"
+usb: "1a86:5512"
+engines: [flashrom]
+needs: [soic8_clip]
+targets: [memory.spi_nor]
+lesson: first_chip
+what: >-
+  Маленькая плата с USB и панелькой ZIF. Подключается к Raspberry Pi или ПК, к микросхеме — через прищепку
+  SOIC-8 или панельку (выпаянный чип).
+steps:
+  - Устройство, которое чините, обесточьте и отключите от сети.
+  - text: Вставьте CH341A в USB и проверьте, что он виден системе.
+    code: lsusb | grep 1a86:5512
+  - text: Один раз — права на USB без sudo (правило udev из комплекта).
+    code: |
+      sudo cp system/99-dirizher.rules /etc/udev/rules.d/
+      sudo udevadm control --reload-rules && sudo udevadm trigger
+      sudo usermod -aG plugdev $USER
+    tip: После usermod выйдите из системы и войдите снова.
+  - Прищепку SOIC-8 вставьте в панель по рисунку на плате (отметка «25xx»), красный провод — вывод 1.
+  - Наденьте прищепку на микросхему ровно — красный провод к точке (вывод 1) на корпусе.
+  - "В config.yaml: plugins → flashrom_spi → programmer: ch341a_spi (так и стоит по умолчанию)."
+check: "«Узнать, что за микросхема» показывает модель и JEDEC ID; две копии «до» совпадают."
+drawings:
+  - type: chain
+    title: Что к чему
+    steps:
+      - {title: Raspberry Pi, sub: USB}
+      - {title: CH341A, sub: "1a86:5512"}
+      - {title: Прищепка, sub: красный = 1}
+      - {title: Флешка 25xx, sub: на плате}
+  - type: package
+    title: "Флешка 25xx, SOIC-8 — вид сверху"
+    style: soic
+    pins: [CS, DO, WP, GND, DI, CLK, HOLD, VCC]
+    mark: {CS: orange, DO: green, GND: black, DI: blue, CLK: yellow, VCC: red}
+caution:
+  - "У части чёрных плат (версия 1.7) питание чипа 3,3 В, а сигнальные линии — 5 В. Измерьте мультиметром; при 5 В — доработка платы или переходник"
+  - Никогда не подключайте чип на 1,8 В без переходника 1,8 В
+  - Если программатор питает всю плату через вывод VCC, процессор может мешать — держите его в сбросе или выпаяйте чип
+verify:
+  - Напряжение на линиях CS/DI/CLK вашего экземпляра (мультиметром или анализатором)
+  - Время чтения и записи 8 МБ

@@ -1,0 +1,64 @@
+id: probe_rs
+kind: engine
+title: probe-rs
+tagline: Читает и пишет флеш микроконтроллеров ARM Cortex-M и RISC-V по SWD/JTAG
+group: tool
+icon: probe
+since: "2019"
+lang: Rust
+license: MIT или Apache-2.0 (на выбор)
+authors:
+  - name: Noah Hüsser (Yatekii)
+    role: основатель проекта
+  - name: Dominik Boehi
+    role: один из основных разработчиков
+  - name: Jack Noppe и сообщество probe-rs
+    role: разработка и сопровождение
+  - name: Команда pyOCD (Arm)
+    role: алгоритмы записи флеша на раннем этапе основаны на коде pyOCD (Apache-2.0)
+links:
+  - {title: Сайт, url: "https://probe.rs"}
+  - {title: Исходный код, url: "https://github.com/probe-rs/probe-rs"}
+what: >-
+  Отладчик-программатор для микроконтроллеров. Подключается к отладочному порту ядра двумя проводами
+  и читает память так же, как это делает среда разработки.
+strengths:
+  - Один инструмент для многих отладчиков — ST-Link, CMSIS-DAP (в т. ч. Raspberry Pi Pico), J-Link
+  - Большая база чипов — имя чипа задаётся один раз, адреса и алгоритм записи уже известны
+  - Быстрый и современный; одна программа без конфигов на каждую плату
+  - ARM и RISC-V, активно развивается
+how:
+  - Отладчик по SWD (SWDIO + SWCLK) подключается к отладочному порту ядра (DAP)
+  - probe-rs останавливает ядро и читает флеш через шину памяти — как отладчик
+  - Для записи загружает в ОЗУ микроконтроллера маленький «алгоритм записи» и передаёт ему данные
+in_dirizher:
+  - "Лезвие probe_rs; модель МК задаёт человек (chip в config.yaml) — уверенность опознания 0,75"
+  - "Опознание — probe-rs list и info: только связь с ядром"
+  - "Чтение — probe-rs read … b8 <адрес> <размер>; запись — download --binary-format bin"
+  - "Запрещены --allow-erase-all, --chip-erase и erase: Дирижёр не снимает защиту чтения (RDP) — объясняет причину"
+plugin: probe_rs
+program: probe-rs
+targets: [mcu.arm]
+adapters: [st_link_v2, pico_probe]
+lesson: tool_arm
+install: "cargo install probe-rs-tools --locked   # или установщик probe-rs-tools-installer.sh со страницы выпусков"
+examples:
+  - {title: Какие отладчики видны, cmd: "probe-rs list"}
+  - {title: Связь с ядром, cmd: "probe-rs info --protocol swd"}
+  - {title: Прочитать 64 КБ флеша STM32, cmd: "probe-rs read --chip STM32F103C8 b8 0x08000000 65536"}
+drawings:
+  - type: chain
+    title: Как устроено в Дирижёре
+    steps:
+      - {title: Дирижёр, sub: "копия, сверка, «ДА»"}
+      - {title: probe_rs, sub: лезвие}
+      - {title: probe-rs, sub: движок}
+      - {title: ST-Link или Pico, sub: отладчик}
+      - {title: SWD, sub: 4 провода}
+      - {title: STM32}
+caution:
+  - Включена защита чтения (RDP) — флеш не прочитать; снятие защиты стирает прошивку. Дирижёр её не снимает
+  - Не подключайте probe_rs и openocd к одному МК одновременно
+verify:
+  - Формат вывода probe-rs read b8 и probe-rs info в вашей версии
+  - "Флаг --binary-format или --format у download"

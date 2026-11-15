@@ -1,0 +1,37 @@
+id: t48
+kind: adapter
+title: XGecu T48 / TL866II+
+tagline: Программатор с панелью ZIF-40 — EEPROM, флешки, параллельная память
+group: buy
+icon: socket
+usb: "a466:0a53"
+engines: [minipro]
+needs: [soic8_socket]
+targets: [memory.parallel, memory.i2c_eeprom, memory.spi_nor]
+lesson: tool_minipro
+what: >-
+  Программатор, который сам подаёт нужные напряжения на панель ZIF. Микросхемы в DIP — прямо в панель,
+  SOIC/TSOP — через переходники из комплекта.
+steps:
+  - Правила udev — system/99-dirizher-tools.rules; соберите и установите minipro (карточка движка minipro).
+  - text: Найдите точное имя микросхемы в базе.
+    code: minipro -L 24C02
+  - Поднимите рычаг, вставьте чип по рисунку для этой модели и корпуса, опустите рычаг.
+  - text: В config.yaml — точное имя.
+    code: |
+      plugins:
+        minipro:
+          enabled: true
+          device: "AT24C02"
+  - text: Только ID.
+    code: minipro -p AT24C02 -D
+check: "Опознание — «ID совпал» или для чипов без ID — модель из настроек."
+drawings:
+  - type: chain
+    steps: [Raspberry Pi, "USB · a466:0a53", T48, "панель ZIF", Микросхема]
+caution:
+  - Неправильное положение чипа в панели повреждает его — сверяйтесь с рисунком для модели
+  - Микроконтроллеры через minipro Дирижёр не обслуживает — для AVR есть avrdude
+verify:
+  - "VID:PID вашей модели (TL866II+ и T48) в lsusb"
+  - Положение чипа в панели для вашей микросхемы

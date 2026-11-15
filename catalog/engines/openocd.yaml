@@ -1,0 +1,57 @@
+id: openocd
+kind: engine
+title: OpenOCD
+tagline: Отладка и запись микроконтроллеров через JTAG/SWD — с огромным выбором адаптеров
+group: tool
+icon: probe
+since: "2005"
+lang: C, Tcl
+license: GPL-2.0 или новее
+authors:
+  - name: Dominic Rath
+    role: создатель — дипломная работа 2005 года, Университет прикладных наук Аугсбурга
+  - name: Hubert Högl
+    role: научный руководитель дипломной работы, соавтор статьи об OpenOCD
+  - name: Øyvind Harboe, Spencer Oliver и сообщество
+    role: многолетняя разработка и сопровождение
+links:
+  - {title: Сайт и руководство, url: "https://openocd.org"}
+what: >-
+  «Открытый внутрисхемный отладчик»: связывает адаптер JTAG/SWD с микроконтроллером и даёт команды
+  чтения и записи памяти. Запасной путь, если probe-rs не знает ваш чип или адаптер.
+strengths:
+  - Огромный выбор адаптеров — FT2232, ST-Link, CMSIS-DAP, J-Link и даже выводы Raspberry Pi
+  - Готовые файлы настроек для тысяч плат и семейств МК
+  - "Отраслевой стандарт: на нём стоят многие среды разработки; есть в пакетах Debian"
+  - Сценарии на Tcl — любой порядок команд
+how:
+  - Файл интерфейса (interface/…cfg) описывает адаптер, файл цели (target/…cfg) — микроконтроллер
+  - init — подключение к ядру по JTAG или SWD; reset halt — сброс и остановка ядра
+  - dump_image — чтение памяти в файл; program … verify — запись с проверкой
+in_dirizher:
+  - "Лезвие openocd; interface, target и модель mcu — в config.yaml"
+  - "Опознание — -c init -c shutdown: строки IDCODE/DPIDR и напряжение цели"
+  - "Запрещены команды со словами unlock, lock, mass_erase, protect, option_write — даже в extra_args"
+plugin: openocd
+program: openocd
+targets: [mcu.arm]
+adapters: [st_link_v2, pico_probe]
+lesson: tool_arm
+install: sudo apt install openocd
+examples:
+  - {title: Связь с STM32F1 через ST-Link, cmd: "openocd -f interface/stlink.cfg -f target/stm32f1x.cfg -c init -c shutdown"}
+  - {title: Через Pico (CMSIS-DAP), cmd: "openocd -f interface/cmsis-dap.cfg -f target/stm32f1x.cfg -c init -c shutdown"}
+drawings:
+  - type: chain
+    title: Как устроено в Дирижёре
+    steps:
+      - {title: Дирижёр}
+      - {title: openocd, sub: лезвие}
+      - {title: OpenOCD, sub: "interface + target"}
+      - {title: Отладчик}
+      - {title: МК}
+caution:
+  - Не включайте openocd и probe_rs на один и тот же МК одновременно — ответят оба
+verify:
+  - Строки опознания (DPIDR, processor detected, Target voltage) в вашей версии
+  - Нужен ли reset halt для вашей платы

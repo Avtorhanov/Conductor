@@ -1,0 +1,48 @@
+id: pico_probe
+kind: adapter
+title: Raspberry Pi Pico как отладчик (собрать)
+tagline: Отладчик SWD из Pico за 10 минут — прошивка debugprobe и три провода
+group: diy
+icon: probe
+voltage: "3,3 В"
+usb: "2e8a:000c"
+engines: [probe_rs, openocd]
+targets: [mcu.arm]
+lesson: tool_arm
+what: >-
+  Официальная прошивка Raspberry Pi «debugprobe» превращает Pico в отладчик CMSIS-DAP. Его понимают
+  и probe-rs, и OpenOCD.
+steps:
+  - Скачайте debugprobe_on_pico.uf2 со страницы выпусков проекта debugprobe (Raspberry Pi).
+  - Зажмите кнопку BOOTSEL на Pico и подключите USB — появится диск RPI-RP2.
+  - Скопируйте файл .uf2 на этот диск — Pico перезагрузится уже отладчиком.
+  - Подключите три провода по рисунку (питание МК — от его платы).
+  - text: Проверьте — Pico виден как CMSIS-DAP.
+    code: probe-rs list
+check: "probe-rs list показывает CMSIS-DAP / Debugprobe; probe-rs info видит ядро."
+drawings:
+  - type: wiring
+    title: Провода
+    a_title: Pico (вывод)
+    b_title: Плата с МК
+    wires:
+      - {a: "3 · GND", b: GND, color: black, note: первым}
+      - {a: "4 · GP2", b: SWCLK, color: yellow}
+      - {a: "5 · GP3", b: SWDIO, color: green}
+  - type: header
+    title: "Pico, левый край (вывод 1 — у разъёма USB)"
+    count: 20
+    rows: 1
+    pins:
+      3: {label: GND, color: black, to: GND}
+      4: {label: GP2, color: yellow, to: SWCLK}
+      5: {label: GP3, color: green, to: SWDIO}
+      6: {label: GP4 TX, color: gray, to: "RX МК (UART, по желанию)"}
+      7: {label: GP5 RX, color: gray, to: "TX МК (UART, по желанию)"}
+caution:
+  - Только МК с логикой 3,3 В
+verify:
+  - Назначение GP2/GP3 в текущей версии debugprobe (документация Raspberry Pi)
+  - VID:PID (2e8a:000c) в lsusb и правило udev для него
+links:
+  - {title: Исходный код debugprobe, url: "https://github.com/raspberrypi/debugprobe"}
