@@ -570,12 +570,59 @@ class NavyThemeTests(unittest.TestCase):
             self.assertIn(token + ":", navy, token)
             self.assertIn(token + ":", light, token)
             self.assertIn(token + ":", light_auto, token)
-        self.assertIn("--tab-radius: 999px", navy)      # полукруглые вкладки
+        self.assertIn("--tab-radius: 14px", navy)       # скруглённые прямоугольники, не «таблетки»
         self.assertIn("--sh-raised: none", light)       # светлая тема осталась плоской
 
     def test_page_works_offline(self):
         for bad in ("https://", "@import", "url(http", "fonts.googleapis", '<link rel="stylesheet"'):
             self.assertNotIn(bad, self.html)
+
+
+class MobileLayoutTests(unittest.TestCase):
+    """Телефон: шапка без просвета, подписи вкладок внутри кнопок, копирование значком рядом с командой."""
+
+    def setUp(self):
+        self.html = (ROOT / "dirizher" / "interface" / "static" / "index.html").read_text(encoding="utf-8")
+
+    def block(self, selector: str) -> str:
+        self.assertIn(selector + " {", self.html)
+        return self.html.split(selector + " {", 1)[1].split("}", 1)[0]
+
+    def test_header_fill_covers_area_above_screen(self):
+        fill = self.block(".top::before")
+        self.assertIn("position: fixed", fill)          # только над экраном: полосу демо не закрывает
+        self.assertIn("bottom: 100%", fill)
+        self.assertIn("var(--top-bg)", fill)
+        self.assertIn("pointer-events: none", fill)
+        self.assertIn('<meta name="theme-color" content="#08112a">', self.html)   # цвет полосы = цвет шапки
+        self.assertIn("--top-bg: #08112a", self.html)
+        bottom = self.block(".tabs::after")
+        self.assertIn("top: 100%", bottom)
+        self.assertIn("var(--tabs-bg)", bottom)
+
+    def test_tab_labels_stay_inside_buttons(self):
+        self.assertIn("repeat(6, minmax(0, 1fr))", self.block(".tabs"))   # длинное слово не раздвигает колонку
+        self.assertIn("min-width: 0", self.block(".tab"))
+        label = self.block(".tab span")
+        for rule in ("white-space: nowrap", "overflow: hidden", "text-overflow: ellipsis"):
+            self.assertIn(rule, label)
+        # на телефоне — короткая подпись, полное имя остаётся для ПК и для экранного диктора
+        self.assertIn('<span class="full">Справочник</span><span class="short">Каталог</span>', self.html)
+        self.assertIn('aria-label="Справочник"', self.html)
+        self.assertIn("@media (max-width: 480px) and (min-height: 521px)", self.html)  # экраны прибора не задеты
+
+    def test_copy_is_icon_beside_code(self):
+        box = self.html.split("function codeBox(code) {", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn('"aria-label": "Копировать команду"', box)
+        self.assertIn("copyIcon(false)", box)
+        self.assertNotIn('"Копировать")', box)          # не текстовая кнопка поверх команды
+        copy = self.block(".code .copy")
+        self.assertNotIn("position: absolute", copy)
+        self.assertIn("flex: none", copy)
+        pre = self.block(".code pre")
+        self.assertIn("min-width: 0", pre)
+        self.assertIn("white-space: pre-wrap", pre)     # длинная команда видна целиком
+        self.assertIn("display: flex", self.block(".code"))
 
 
 if __name__ == "__main__":

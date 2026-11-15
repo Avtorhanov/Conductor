@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0a1430">
+<meta name="theme-color" content="#08112a">
 <meta name="color-scheme" content="dark light">
 <title>Дирижёр</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -39,7 +39,7 @@ if ("serviceWorker" in navigator && location.protocol === "https:") {
   /* форма и объём */
   --top-bg: #08112a; --edge: transparent; --card-gap: 1.3rem; --opts-gap: .8rem; --list-gap: .6rem;
   --tabs-bg: #08112a; --tabs-pad: .55rem .6rem .6rem; --tabs-gap: .5rem; --tabs-inner: 1.15rem; --tabs-gap-wide: .75rem;
-  --tab-bg: #132550; --tab-on-bg: #1f3d7a; --tab-on-ink: #ffffff; --tab-radius: 999px; --tab-lift: translateY(-2px);
+  --tab-bg: #132550; --tab-on-bg: #1f3d7a; --tab-on-ink: #ffffff; --tab-radius: 14px; --tab-lift: translateY(-2px);
   --seg-bg: #060b1a; --seg-pad: 3px; --seg-radius: 999px; --seg-btn-bg: transparent; --seg-btn-radius: 999px;
   --sh-raised: 4px 6px 0 #02050f, 10px 16px 24px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.1), inset 0 -3px 0 rgba(0,0,0,.28);
   --sh-on: 5px 8px 0 #02050f, 12px 20px 30px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.16), inset 0 -3px 0 var(--accent);
@@ -102,6 +102,13 @@ a { color: var(--info); }
   padding: calc(.55rem + env(safe-area-inset-top)) 1rem .55rem; background: var(--top-bg);
   border-bottom: 1px solid var(--line);
 }
+/* Всё, что выше края экрана, залито цветом шапки. На iPhone (Safari iOS 26) страница рисуется и под строкой
+   состояния — без этой заливки там просвечивают прокручиваемые карточки. Полоса демо не закрывается:
+   она внутри экрана, а заливка — только над ним. */
+.top::before {
+  content: ""; position: fixed; left: 0; right: 0; bottom: 100%; height: 100vh;
+  background: var(--top-bg); pointer-events: none;
+}
 .brand { display: flex; align-items: center; gap: .5rem; font-weight: 700; letter-spacing: .02em; font-size: 1.1rem; font-family: var(--font-head); }
 .brand svg { width: 1.6rem; height: 1.6rem; color: var(--accent); }
 .spacer { flex: 1; }
@@ -116,17 +123,25 @@ a { color: var(--info); }
 
 main { padding: 1rem 1rem calc(var(--tabs-h) + 1.5rem + env(safe-area-inset-bottom)); max-width: 880px; margin: 0 auto; }
 .tabs {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid; grid-template-columns: repeat(6, 1fr);
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
   background: var(--tabs-bg); border-top: 1px solid var(--line); gap: var(--tabs-gap);
   padding: var(--tabs-pad); padding-bottom: calc(env(safe-area-inset-bottom) + var(--tabs-inner) / 2);
 }
+/* то же снизу: под меню (полоса жеста iPhone, оттягивание) не видно прокручиваемых карточек */
+.tabs::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 100%; height: 100vh;
+  background: var(--tabs-bg); pointer-events: none;
+}
 .tab {
+  min-width: 0; padding: 0 .15rem;
   border: 0; background: var(--tab-bg); color: var(--muted); min-height: calc(var(--tabs-h) - var(--tabs-inner)); display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: .15rem; font-size: .72rem; position: relative;
   border-radius: var(--tab-radius); box-shadow: var(--sh-raised); font-family: var(--font-head);
   transition: transform .08s, box-shadow .08s, background .12s;
 }
-.tab svg { width: 1.5rem; height: 1.5rem; }
+.tab svg { width: 1.5rem; height: 1.5rem; flex: none; }
+.tab span { max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tab .short { display: none; }
 .tab[aria-current="page"] { color: var(--tab-on-ink); background: var(--tab-on-bg); box-shadow: var(--sh-on); transform: var(--tab-lift); font-weight: 600; }
 .tab[aria-current="page"] svg { color: var(--accent); }
 .tab:active { transform: var(--press); box-shadow: var(--sh-press); }
@@ -144,6 +159,7 @@ main { padding: 1rem 1rem calc(var(--tabs-h) + 1.5rem + env(safe-area-inset-bott
     position: sticky; top: 3.4rem; align-self: start; grid-template-columns: 1fr; border: 0;
     background: none; padding: 1rem .6rem; gap: var(--tabs-gap-wide);
   }
+  .tabs::after { display: none; }
   .tab { flex-direction: row; justify-content: flex-start; gap: .7rem; padding: 0 1rem; min-height: 3rem; border-radius: var(--tab-radius); font-size: .95rem; }
   .tab .badge { top: 50%; left: auto; right: .8rem; transform: translateY(-50%); }
   main { padding-bottom: 2rem; margin: 0; width: 100%; }
@@ -276,12 +292,15 @@ a.btn { text-decoration: none; color: var(--text); }
 .events { font-family: var(--mono); font-size: .78rem; color: var(--muted); max-height: 50vh; overflow: auto; white-space: pre-wrap; }
 ol.steps { padding-left: 1.4rem; margin: .5rem 0; }
 ol.steps li { margin: 0 0 1rem; padding-left: .2rem; }
-.code { position: relative; margin: .5rem 0 0; }
+.code { display: flex; align-items: flex-start; gap: .45rem; margin: .5rem 0 0; }
 .code pre {
-  margin: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: .7rem .8rem;
+  flex: 1; min-width: 0; margin: 0; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: .7rem .8rem;
   overflow: auto; font-family: var(--mono); font-size: .82rem; line-height: 1.5;
+  white-space: pre-wrap; overflow-wrap: anywhere;   /* длинная команда переносится, а не уезжает за край */
 }
-.code .copy { position: absolute; top: .35rem; right: .35rem; }
+.code .copy { flex: none; width: 2.75rem; height: 2.75rem; min-height: 0; padding: 0; border-radius: 10px; }
+.code .copy svg { width: 1.2rem; height: 1.2rem; }
+.code .copy.done { color: var(--ok); }
 .check { background: var(--ok-bg); border-radius: 10px; padding: .7rem .9rem; margin: .4rem 0 1rem; }
 .why { font-size: 1.05rem; }
 label.f { display: block; margin: 0 0 .9rem; }
@@ -431,7 +450,14 @@ table.wires td:not(:last-child) { white-space: nowrap; padding-right: .9rem; }
 .checks-grid label { display: flex; gap: .45rem; align-items: center; min-height: 2.2rem; }
 .checks-grid input { width: 1.2rem; height: 1.2rem; }
 details.yaml summary { cursor: pointer; color: var(--muted); padding: .3rem 0; }
-@media (max-width: 420px) { .tab { font-size: .64rem; } .wire-row { grid-template-columns: 1fr 1fr 5.6rem 2.4rem; } }
+/* телефон: короткие подписи вкладок, чтобы слово целиком ложилось в кнопку */
+@media (max-width: 480px) and (min-height: 521px) {
+  .tabs { gap: min(var(--tabs-gap), .3rem); }
+  .tab { font-size: min(.68rem, 2.75vw); }   /* 390 px — .68rem, уже — мельче, но слово целиком */
+  .tab .full { display: none; }
+  .tab .short { display: inline; }
+}
+@media (max-width: 420px) { .wire-row { grid-template-columns: 1fr 1fr 5.6rem 2.4rem; } }
 </style>
 </head>
 <body>
@@ -461,9 +487,9 @@ details.yaml summary { cursor: pointer; color: var(--muted); padding: .3rem 0; }
     <button class="tab" data-tab="log" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/></svg>
       <span>Журнал</span></button>
-    <button class="tab" data-tab="catalog" type="button">
+    <button class="tab" data-tab="catalog" type="button" title="Справочник" aria-label="Справочник">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5z"/><path d="M5 19.5A1.5 1.5 0 0 0 6.5 21H19v-3"/><path d="M9 7.5h6M9 11h4"/></svg>
-      <span>Справочник</span></button>
+      <span class="full">Справочник</span><span class="short">Каталог</span></button>
     <button class="tab" data-tab="dev" type="button">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5a4 4 0 0 0 4.9 5.2L12 18.1a2.1 2.1 0 1 1-3-3l7.4-7.4"/><path d="M4 4l4 4M3 8l2-2"/></svg>
       <span>Навыки</span></button>
@@ -1329,10 +1355,25 @@ function applyPrefs() {
 /* =====================================================================
    Мастерская: общие куски
    ===================================================================== */
+/* значок «копировать» (два листа) и «скопировано» (галочка) */
+function copyIcon(done) {
+  return sv("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2",
+    "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true" },
+    done ? sv("path", { d: "M5 12.5l4.5 4.5L19 7.5" })
+         : [sv("rect", { x: "9", y: "9", width: "11", height: "11", rx: "2" }), sv("path", { d: "M5 15V6a2 2 0 0 1 2-2h9" })]);
+}
+
+/* Команда и значок копирования рядом, а не поверх: текст виден целиком и выделяется пальцем по частям. */
 function codeBox(code) {
   code = String(code).replace(/\s+$/, "");
-  const btn = h("button", { class: "btn small copy", type: "button" }, "Копировать");
-  btn.addEventListener("click", async () => { toast(await copyText(code) ? "Скопировано" : "Не удалось скопировать — выделите текст вручную"); });
+  const btn = h("button", { class: "btn copy", type: "button", title: "Копировать", "aria-label": "Копировать команду" }, copyIcon(false));
+  btn.addEventListener("click", async () => {
+    const ok = await copyText(code);
+    toast(ok ? "Скопировано" : "Не удалось скопировать — выделите текст вручную");
+    if (!ok) return;
+    btn.classList.add("done"); btn.replaceChildren(copyIcon(true));
+    setTimeout(() => { btn.classList.remove("done"); btn.replaceChildren(copyIcon(false)); }, 1500);
+  });
   return h("div", { class: "code" }, h("pre", {}, code), btn);
 }
 
