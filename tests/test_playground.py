@@ -169,6 +169,14 @@ class PageTests(unittest.TestCase):
         self.assertEqual(json.loads(blob), playground.load())
         self.assertNotIn("</", blob)                        # данные не закроют <script> раньше времени
 
+    def test_back_everywhere(self):
+        # шапка: «назад» на каждом экране, кроме главной; на главной — «← Дирижёр» (кроме отдельного файла)
+        self.assertIn('id="upBtn"', self.page)
+        self.assertIn('if (hash === "glossary" || !part) return ["#", "← Все маршруты"];', self.page)
+        self.assertIn('return ["#" + tid, "← К маршруту"];', self.page)
+        self.assertIn('if (up && !(t && part && part !== "done")) view.append(backRow(hash));', self.page)
+        self.assertIn('i ? "← Назад" : "← К маршруту"', self.page)        # шаг: внизу
+
     def test_same_theme_and_progress_store_as_app(self):
         self.assertIn('localStorage.getItem("drz." + k)', self.page)
         self.assertIn('store.get("theme", "auto")', self.page)

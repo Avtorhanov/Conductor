@@ -70,8 +70,9 @@ code { font-family: var(--mono); font-size: .88em; background: var(--surface2); 
   padding: calc(.5rem + env(safe-area-inset-top)) 1rem .5rem; background: var(--top-bg); border-bottom: 1px solid var(--line); }
 /* как в Дирижёре: всё, что выше края экрана (iOS рисует страницу под строкой состояния), — цветом шапки */
 .top::before { content: ""; position: fixed; left: 0; right: 0; bottom: 100%; height: 100vh; background: var(--top-bg); pointer-events: none; }
-.brand { font-family: var(--font-head); font-weight: 700; font-size: 1.05rem; background: none; border: 0; padding: .3rem 0; text-align: left; }
-.back { text-decoration: none; color: var(--muted); font-size: .9rem; white-space: nowrap; padding: .3rem .1rem; }
+.brand { font-family: var(--font-head); font-weight: 700; font-size: 1.05rem; background: none; border: 0; padding: .3rem 0; text-align: left; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.back { text-decoration: none; color: var(--muted); font-size: .9rem; white-space: nowrap; padding: .3rem .1rem; background: none; border: 0; }
+.backrow { margin: 0 0 .7rem; }
 .spacer { flex: 1; }
 .pill { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: .25rem .7rem; font-size: .85rem; white-space: nowrap; }
 main { max-width: 820px; margin: 0 auto; padding: 1rem 1rem calc(6rem + env(safe-area-inset-bottom)); }
@@ -175,6 +176,7 @@ main:focus { outline: none; }
 <body>
 <header class="top">
   <a class="back" id="toApp" href="./" title="Вернуться в Дирижёр">← Дирижёр</a>
+  <button class="back" id="upBtn" type="button" hidden>← Назад</button>
   <button class="brand" id="toHome" type="button">Учебная площадка</button>
   <span class="spacer"></span>
   <span class="pill" id="total" title="Пройдено шагов">0%</span>
@@ -271,6 +273,17 @@ function markDone(t, i) {
   save();
 }
 function bar(pct) { return h("div", { class: "bar", role: "progressbar", "aria-valuenow": pct, "aria-valuemin": 0, "aria-valuemax": 100 }, h("i", { style: `width:${pct}%` })); }
+/* куда ведёт «назад» с каждого экрана: шаг и итог → маршрут, маршрут и словарик → все маршруты */
+function upOf(hash) {
+  const [tid, part] = hash.split("/");
+  if (!hash) return null;
+  if (hash === "glossary" || !part) return ["#", "← Все маршруты"];
+  return ["#" + tid, "← К маршруту"];
+}
+function backRow(hash) {
+  const up = upOf(hash);
+  return up ? h("div", { class: "backrow" }, h("button", { class: "btn ghost", type: "button", onclick: () => go(up[0]) }, up[1])) : null;
+}
 function go(hash) {
   if (location.hash.replace(/^#/, "") === hash.replace(/^#/, "")) render();
   else location.hash = hash;
@@ -495,7 +508,9 @@ function renderDone(t) {
     card.append(h("h3", {}, "Куда дальше"), h("div", { class: "row" }, next.map(n =>
       h("button", { class: "btn", type: "button", onclick: () => go("#" + n.id) }, `${n.icon || ""} ${n.title}`))));
   }
-  card.append(h("p", { style: "margin-top:1.2rem" }, h("button", { class: "btn main", type: "button", onclick: () => go("#") }, "Все маршруты")));
+  card.append(h("p", { class: "row", style: "margin-top:1.2rem" },
+    h("button", { class: "btn", type: "button", onclick: () => go("#" + t.id) }, "← К маршруту"),
+    h("button", { class: "btn main", type: "button", onclick: () => go("#") }, "Все маршруты")));
   view.append(card);
 }
 
@@ -522,6 +537,11 @@ function render() {
   const hash = decodeURIComponent(location.hash.replace(/^#/, ""));
   const [tid, part] = hash.split("/");
   const t = tid && track(tid);
+  const up = upOf(hash), upBtn = document.getElementById("upBtn");
+  upBtn.hidden = !up;
+  if (up) { upBtn.textContent = up[1]; upBtn.onclick = () => go(up[0]); }
+  document.getElementById("toApp").hidden = !!up || !!window.PLAYGROUND_STANDALONE;
+  if (up && !(t && part && part !== "done")) view.append(backRow(hash));
   if (hash === "glossary") renderGlossary();
   else if (t && part === "done") renderDone(t);
   else if (t && part && Number(part) >= 1 && Number(part) <= t.steps.length) renderStep(t, Number(part) - 1);
