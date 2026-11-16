@@ -49,6 +49,7 @@ APP_FILES = {
     "icon-192.png": "image/png",
     "icon-512.png": "image/png",
     "icon-maskable-512.png": "image/png",
+    "apple-touch-icon.png": "image/png",     # iPhone: «На экран "Домой"» (180×180, без прозрачности)
 }
 # Учебная площадка (тренажёр): страница и её данные из playground.yaml. Тоже без кода входа —
 # это учебный текст, в нём нет ни данных прибора, ни действий.
