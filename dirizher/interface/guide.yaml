@@ -15,7 +15,8 @@
 #   history, plugins, profiles, roadmap, builder, capture (scan: true — найти анализатор),
 #   params (прочитать параметры прибора), tune (set: {параметр: значение}), tune_form,
 #   skills (вкладка «Навыки»), help (article: имя статьи), hood (area: guide|work|log|dev|device|help),
-#   doctor (самопроверка), fix (что помогло).
+#   doctor (самопроверка), fix (что помогло), catalog (card, kind),
+#   playground (track: id маршрута из playground.yaml — учебная площадка).
 #   Значение «ask» в params — спросить у человека (метку или файл образа).
 #   Для rollback, feedback, reference, export сеанс выбирается из журнала.
 #
@@ -69,6 +70,10 @@ nodes:
         label: Потренироваться без железа
         explain: виртуальная микросхема с учебными поломками
         next: sim
+      - icon: "🧭"
+        label: "Учебная площадка: ноутбук, ТВ, телефон, машина"
+        explain: пошаговый тренажёр с вопросами — что и как можно сделать тем, что есть дома
+        action: playground
       - icon: "🛠"
         label: Развивать Дирижёр
         explain: навыки, капот, профили, проверки — с примерами
@@ -160,6 +165,10 @@ nodes:
       - label: Учебный ремонт по шагам
         explain: начните отсюда
         lesson: sim_tour
+      - label: "Тренажёр: как думает Дирижёр"
+        explain: 7 шагов, копии, эталон, «ДА» — с вопросами и протоколами ядра
+        action: playground
+        params: {track: start}
       - label: Исправная прошивка
         explain: начать с чистого листа
         action: sim

@@ -2,6 +2,7 @@
 
 Править можно (когда капот открыт):
   навыки (skills/**), профили (profiles/**), справку (help/*.md), вопросы Штурмана (guide.yaml),
+  маршруты учебной площадки (playground.yaml — без слова подтверждения, это учебный текст),
   карточки справочника (catalog/**: движки и переходники — без слова подтверждения, они только описывают),
   лезвия (dirizher/plugins/*.py — кроме общих помощников _common.py и учебного симулятора).
 Только смотреть:
@@ -34,6 +35,7 @@ from ..core.storage import sha256
 TEXT_SUFFIXES = {".py", ".yaml", ".yml", ".md", ".txt"}
 MAX_BYTES = 512 * 1024
 GUIDE = "dirizher/interface/guide.yaml"
+PLAYGROUND = "dirizher/interface/playground.yaml"
 CORE_REASON = "ядро: порядок работы и защита — меняется только через git с тестами (PRINCIPLES.md, п. 1–4)"
 SERVICE_REASON = "служебный код — меняется через git с тестами"
 VIEW_REASONS = {
@@ -44,7 +46,7 @@ VIEW_REASONS = {
     "dirizher/plugins/_template.py": "шаблон лезвия — новые лезвия добавляйте навыком",
 }
 AREAS = {
-    "guide": ("Штурман", [GUIDE, "dirizher/interface/guide.py"]),
+    "guide": ("Штурман", [GUIDE, PLAYGROUND, "dirizher/interface/guide.py"]),
     "work": ("Работа", ["dirizher/core/pipeline.py", "dirizher/core/safety.py", "dirizher/core/params.py",
                         "dirizher/core/checks.py"]),
     "log": ("Журнал", ["dirizher/core/memory.py", "dirizher/core/learning.py", "dirizher/core/storage.py"]),
@@ -98,7 +100,7 @@ def classify(rel: str) -> tuple:
         return "edit", ""
     if parts[0] == "catalog" and pp.suffix in (".yaml", ".yml"):
         return "edit", ""
-    if rel == GUIDE:
+    if rel in (GUIDE, PLAYGROUND):
         return "edit", ""
     if rel in VIEW_REASONS:
         return "view", VIEW_REASONS[rel]
@@ -131,7 +133,7 @@ def needs_word(rel: str) -> bool:
     if k == "python":
         return True
     from .catalog import is_card_path
-    return k == "yaml" and rel != GUIDE and not is_card_path(rel)
+    return k == "yaml" and rel not in (GUIDE, PLAYGROUND) and not is_card_path(rel)
 
 
 class Hood:
@@ -259,6 +261,12 @@ class Hood:
             if rel == GUIDE:
                 from ..interface import guide
                 res["errors"] += guide.validate(data)
+            elif rel == PLAYGROUND:
+                from ..interface import playground
+                res["errors"] += playground.validate(data)
+                if not res["errors"]:
+                    res["hints"].append(f"маршрутов: {len(data['tracks'])}, "
+                                        f"шагов: {sum(len(t['steps']) for t in data['tracks'])}")
             elif is_card_path(rel):
                 if PurePosixPath(rel).name.startswith("_"):
                     res["hints"].append("шаблон: не загружается, им пользуется «+ Карточка»")

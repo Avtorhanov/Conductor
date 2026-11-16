@@ -1,0 +1,556 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#08112a">
+<meta name="color-scheme" content="dark light">
+<title>Учебная площадка — Дирижёр</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22%3E%3Crect width=%2224%22 height=%2224%22 rx=%225%22 fill=%22%230e1116%22/%3E%3Cpath d=%22M5 19L16 8%22 stroke=%22%23e8b04a%22 stroke-width=%222.4%22 stroke-linecap=%22round%22/%3E%3Ccircle cx=%2217.5%22 cy=%226.5%22 r=%222.2%22 fill=%22%23e8b04a%22/%3E%3C/svg%3E">
+<style>
+/* Учебная площадка «Дирижёра» — пошаговый тренажёр. Одна страница без сети и сторонних библиотек:
+   на приборе (/playground.html), в демо на GitHub Pages и отдельным файлом (данные внутри).
+   Темы и размер текста — те же, что выбраны в Дирижёре («Нави» / «Светлое»). */
+:root {
+  --bg: #0a1430; --surface: #11214a; --surface2: #162b5b; --line: #1e3366; --top-bg: #08112a;
+  --text: #e8eeff; --muted: #9aaed6; --accent: #49d3ff; --accent-ink: #04122e;
+  --ok: #4be3a3; --warn: #ffc24d; --bad: #ff6b7a; --info: #8fb4ff;
+  --ok-bg: rgba(75,227,163,.14); --warn-bg: rgba(255,194,77,.14); --bad-bg: rgba(255,107,122,.15);
+  --info-bg: rgba(143,180,255,.14); --acc-bg: rgba(73,211,255,.12);
+  --term-bg: #050a18; --term-text: #d7e3ff;
+  --radius: 16px; --scale: 1;
+  --sh-card: 4px 6px 0 #02050f, 10px 16px 26px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.07);
+  --sh-item: 3px 4px 0 #02050f, inset 0 1px 0 rgba(255,255,255,.06);
+  --mono: ui-monospace, "SFMono-Regular", "DejaVu Sans Mono", Menlo, Consolas, monospace;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "DejaVu Sans", sans-serif;
+  --font-head: "Exo 2", "Jura", var(--font);
+  font-size: calc(16px * var(--scale));
+}
+:root[data-theme="light"] {
+  --bg: #f5f3ee; --surface: #ffffff; --surface2: #f0ede6; --line: #ddd8cc; --top-bg: #f5f3ee;
+  --text: #1d2228; --muted: #67707a; --accent: #b7791f; --accent-ink: #ffffff;
+  --ok: #1f8a3a; --warn: #a36a00; --bad: #c8382d; --info: #2f6fbf;
+  --ok-bg: rgba(63,185,80,.12); --warn-bg: rgba(217,163,58,.14); --bad-bg: rgba(242,100,90,.13);
+  --info-bg: rgba(106,169,245,.12); --acc-bg: rgba(183,121,31,.1);
+  --term-bg: #1d2228; --term-text: #e8eeff;
+  --radius: 14px; --sh-card: none; --sh-item: none; --font-head: var(--font);
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="navy"]) {
+    --bg: #f5f3ee; --surface: #ffffff; --surface2: #f0ede6; --line: #ddd8cc; --top-bg: #f5f3ee;
+    --text: #1d2228; --muted: #67707a; --accent: #b7791f; --accent-ink: #ffffff;
+    --ok: #1f8a3a; --warn: #a36a00; --bad: #c8382d; --info: #2f6fbf;
+    --ok-bg: rgba(63,185,80,.12); --warn-bg: rgba(217,163,58,.14); --bad-bg: rgba(242,100,90,.13);
+    --info-bg: rgba(106,169,245,.12); --acc-bg: rgba(183,121,31,.1);
+    --term-bg: #1d2228; --term-text: #e8eeff;
+    --radius: 14px; --sh-card: none; --sh-item: none; --font-head: var(--font);
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--text); font: 1rem/1.5 var(--font); -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+a { color: var(--info); }
+[hidden] { display: none !important; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+/* заголовок получает фокус при смене экрана — для экранного диктора, без рамки */
+[tabindex="-1"]:focus { outline: none; }
+h1, h2, h3 { font-family: var(--font-head); line-height: 1.25; }
+h1 { font-size: 1.45rem; margin: .1rem 0 .4rem; }
+h2 { font-size: 1.25rem; margin: .2rem 0 .6rem; }
+h3 { font-size: 1rem; margin: 1.1rem 0 .5rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+p { margin: .5rem 0; }
+ul, ol { margin: .4rem 0 .6rem; padding-left: 1.3rem; }
+li { margin: .25rem 0; }
+code { font-family: var(--mono); font-size: .88em; background: var(--surface2); border-radius: 6px; padding: .05rem .3rem; overflow-wrap: anywhere; }
+
+/* ---------- шапка ---------- */
+.top { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: .5rem;
+  padding: calc(.5rem + env(safe-area-inset-top)) 1rem .5rem; background: var(--top-bg); border-bottom: 1px solid var(--line); }
+/* как в Дирижёре: всё, что выше края экрана (iOS рисует страницу под строкой состояния), — цветом шапки */
+.top::before { content: ""; position: fixed; left: 0; right: 0; bottom: 100%; height: 100vh; background: var(--top-bg); pointer-events: none; }
+.brand { font-family: var(--font-head); font-weight: 700; font-size: 1.05rem; background: none; border: 0; padding: .3rem 0; text-align: left; }
+.back { text-decoration: none; color: var(--muted); font-size: .9rem; white-space: nowrap; padding: .3rem .1rem; }
+.spacer { flex: 1; }
+.pill { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: .25rem .7rem; font-size: .85rem; white-space: nowrap; }
+main { max-width: 820px; margin: 0 auto; padding: 1rem 1rem calc(6rem + env(safe-area-inset-bottom)); }
+main:focus { outline: none; }
+
+/* ---------- карточки ---------- */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem 1.1rem; margin: 0 0 1rem; box-shadow: var(--sh-card); }
+.muted { color: var(--muted); }
+.small { font-size: .88rem; }
+.bar { height: .45rem; background: var(--surface2); border-radius: 999px; overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+.chips { display: flex; flex-wrap: wrap; gap: .4rem; margin: .5rem 0; }
+.chip { font-size: .8rem; border: 1px solid var(--line); border-radius: 999px; padding: .15rem .6rem; color: var(--muted); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-height: 2.75rem; padding: .55rem 1.1rem;
+  border-radius: 12px; border: 1px solid var(--line); background: var(--surface2); font-weight: 600; box-shadow: var(--sh-item); text-decoration: none; color: inherit; }
+.btn.main { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.btn.ghost { background: transparent; box-shadow: none; }
+.btn:active { transform: translate(1px, 2px); }
+.row { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; }
+
+/* ---------- маршруты ---------- */
+.level { margin: 1.4rem 0 .6rem; color: var(--muted); font-size: .85rem; text-transform: uppercase; letter-spacing: .05em; }
+.tracks { display: grid; gap: .8rem; }
+@media (min-width: 640px) { .tracks { grid-template-columns: 1fr 1fr; } }
+.track { display: grid; grid-template-columns: 2.6rem 1fr; gap: .2rem .7rem; text-align: left; width: 100%;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: .85rem .9rem; box-shadow: var(--sh-item); }
+.track .ico { grid-row: span 3; font-size: 1.7rem; line-height: 2.6rem; text-align: center; }
+.track b { font-size: 1.02rem; }
+.track small { color: var(--muted); font-size: .86rem; }
+.track .meta { display: flex; align-items: center; gap: .6rem; font-size: .78rem; color: var(--muted); }
+.track .meta .bar { flex: 1; height: .3rem; }
+.track.done { border-color: var(--ok); }
+.steps-list { list-style: none; padding: 0; margin: .4rem 0; counter-reset: s; }
+.steps-list li { margin: 0; }
+.steps-list button { width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); padding: .55rem .2rem; display: flex; gap: .6rem; }
+.steps-list .n { min-width: 1.6rem; height: 1.6rem; border-radius: 50%; border: 1px solid var(--line); display: inline-flex; align-items: center; justify-content: center; font-size: .8rem; flex: none; }
+.steps-list .ok .n { background: var(--ok); color: var(--accent-ink); border-color: var(--ok); }
+
+/* ---------- шаг ---------- */
+.stephead { position: sticky; top: calc(3.1rem + env(safe-area-inset-top)); z-index: 10; background: var(--bg); padding: .4rem 0 .5rem; margin: -1rem 0 .6rem; }
+.stephead .row { justify-content: space-between; font-size: .85rem; }
+.stephead a { color: var(--muted); text-decoration: none; }
+.segs { display: flex; gap: 3px; margin-top: .4rem; }
+.segs i { flex: 1; height: .32rem; border-radius: 999px; background: var(--surface2); }
+.segs i.ok { background: var(--ok); }
+.segs i.now { background: var(--accent); }
+.box { border-radius: 12px; padding: .7rem .85rem; margin: .8rem 0; border: 1px solid transparent; }
+.box > b:first-child { display: block; font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; margin-bottom: .15rem; }
+.box.why { background: var(--info-bg); } .box.why > b { color: var(--info); }
+.box.drz { background: var(--acc-bg); border-color: var(--accent); } .box.drz > b { color: var(--accent); }
+.box.warn { background: var(--bad-bg); } .box.warn > b { color: var(--bad); }
+.box.verify { background: var(--warn-bg); } .box.verify > b { color: var(--warn); }
+.code { position: relative; margin: .8rem 0; }
+.code pre { margin: 0; background: var(--term-bg); color: var(--term-text); border-radius: 12px; padding: .75rem 3rem .75rem .85rem;
+  font: .82rem/1.55 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.copy { position: absolute; top: .35rem; right: .35rem; width: 2.4rem; height: 2.4rem; border-radius: 10px; border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.06); color: var(--term-text); }
+.ticks { list-style: none; padding: 0; }
+.ticks label { display: flex; gap: .6rem; align-items: flex-start; padding: .35rem 0; }
+.ticks input { width: 1.3rem; height: 1.3rem; margin-top: .15rem; accent-color: var(--ok); flex: none; }
+.term { font: inherit; color: var(--info); background: none; border: 0; border-bottom: 1px dashed var(--info); padding: 0; cursor: help; }
+
+/* ---------- вопрос ---------- */
+.quiz { border-top: 1px solid var(--line); margin-top: 1rem; padding-top: .4rem; }
+.opts { display: grid; gap: .55rem; margin: .5rem 0; }
+.opt { text-align: left; width: 100%; padding: .7rem .85rem; border-radius: 12px; border: 1px solid var(--line); background: var(--surface2); box-shadow: var(--sh-item); }
+.opt.good { border-color: var(--ok); background: var(--ok-bg); }
+.opt.badc { border-color: var(--bad); background: var(--bad-bg); }
+.opt.right { border-color: var(--ok); border-style: dashed; }
+.opt[disabled] { cursor: default; }
+.say { border-radius: 12px; padding: .6rem .8rem; margin: .4rem 0; }
+.say.good { background: var(--ok-bg); } .say.badc { background: var(--bad-bg); }
+
+/* ---------- сеанс вживую ---------- */
+.cases { display: flex; flex-wrap: wrap; gap: .5rem; margin: .5rem 0; }
+.case { padding: .5rem .8rem; border-radius: 999px; border: 1px solid var(--line); background: var(--surface2); font-size: .9rem; text-align: left; }
+.case[aria-pressed="true"] { border-color: var(--accent); background: var(--acc-bg); }
+.term-out { background: var(--term-bg); color: var(--term-text); border-radius: 12px; padding: .7rem .85rem; font: .78rem/1.55 var(--mono);
+  min-height: 3rem; max-height: 60vh; overflow: auto; }
+.term-out div { white-space: pre-wrap; overflow-wrap: anywhere; }
+.term-out .hdr { color: #fff; font-weight: 700; }
+.term-out .step { color: #49d3ff; font-weight: 700; margin-top: .45rem; }
+.term-out .ok { color: #4be3a3; } .term-out .warn { color: #ffc24d; } .term-out .bad { color: #ff8a96; }
+.term-out .ask { color: #c9b6ff; } .term-out .you { color: #fff; font-weight: 700; } .term-out .info { color: #9aaed6; }
+
+/* ---------- низ ---------- */
+.nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: flex; gap: .6rem; justify-content: space-between;
+  padding: .6rem 1rem calc(.6rem + env(safe-area-inset-bottom)); background: var(--top-bg); border-top: 1px solid var(--line); }
+.nav::after { content: ""; position: fixed; left: 0; right: 0; top: 100%; height: 100vh; background: var(--top-bg); pointer-events: none; }
+.nav .btn { flex: 1; max-width: 22rem; }
+.sheet { position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.5); display: flex; align-items: flex-end; justify-content: center; }
+.sheet .in { background: var(--surface); border: 1px solid var(--line); border-radius: 18px 18px 0 0; padding: 1rem 1.1rem calc(1rem + env(safe-area-inset-bottom)); width: 100%; max-width: 640px; }
+@media (min-width: 640px) { .sheet { align-items: center; } .sheet .in { border-radius: 18px; } }
+.gl dt { font-weight: 700; margin-top: .8rem; }
+.gl dd { margin: .15rem 0 0; color: var(--muted); }
+.search { width: 100%; padding: .65rem .8rem; border-radius: 12px; border: 1px solid var(--line); background: var(--surface2); }
+/* экраны прибора 800×480 и 480×320 */
+@media (max-height: 520px) { .nav { padding-top: .4rem; } .nav .btn { min-height: 2.4rem; padding: .35rem .8rem; } main { padding-top: .6rem; padding-bottom: calc(4.5rem + env(safe-area-inset-bottom)); } .card { padding: .7rem .8rem; } h1 { font-size: 1.2rem; } .stephead { top: calc(2.8rem + env(safe-area-inset-top)); } }
+@media (max-width: 420px) { .top { padding-left: .7rem; padding-right: .7rem; } main { padding-left: .8rem; padding-right: .8rem; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <a class="back" id="toApp" href="./" title="Вернуться в Дирижёр">← Дирижёр</a>
+  <button class="brand" id="toHome" type="button">Учебная площадка</button>
+  <span class="spacer"></span>
+  <span class="pill" id="total" title="Пройдено шагов">0%</span>
+</header>
+<main id="view" tabindex="-1"><p class="muted">Загрузка…</p></main>
+<div class="sheet" id="sheet" hidden></div>
+<script>
+"use strict";
+/*PLAYGROUND_DATA*/
+
+/* ---------- хранилище: прогресс, а также тема и размер текста из Дирижёра ---------- */
+const store = {
+  get(k, d) { try { const v = localStorage.getItem("drz." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem("drz." + k, JSON.stringify(v)); } catch (e) { /* без хранилища — просто без памяти */ } },
+};
+(function prefs() {
+  const t = store.get("theme", "auto"), theme = t === "dark" ? "navy" : t;
+  if (theme !== "auto") document.documentElement.setAttribute("data-theme", theme);
+  document.documentElement.style.setProperty("--scale", store.get("scale", 1));
+})();
+let P = store.get("playground", null);
+if (!P || typeof P !== "object") P = {};
+P.done = P.done || {}; P.quiz = P.quiz || {}; P.tick = P.tick || {};
+function save() { store.set("playground", P); }
+
+let D = null;                       // данные площадки
+let timer = null;                   // анимация «сеанса вживую»
+const view = document.getElementById("view");
+
+/* ---------- маленькие помощники ---------- */
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k === "html") el.innerHTML = v;
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : String(kid));
+  return el;
+}
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+function inline(s) {
+  return esc(s)
+    .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (m, k, label) =>
+      `<button type="button" class="term" data-term="${k.trim()}">${(label || k).trim()}</button>`)
+    .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
+    .replace(/`([^`]+)`/g, "<code>$1</code>");
+}
+function plain(s) {
+  return String(s || "").replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (m, k, l) => (l || k).trim())
+    .replace(/\*\*(.+?)\*\*/g, "$1").replace(/`([^`]+)`/g, "$1");
+}
+/* абзацы; строки «- » — список, «1. » — нумерованный список */
+function rich(text) {
+  const out = [];
+  for (const chunk of String(text || "").split(/\n\s*\n/)) {
+    let list = null, kind = "", para = [];
+    const flush = () => {
+      if (para.length) { out.push(`<p>${inline(para.join(" "))}</p>`); para = []; }
+      if (list) { out.push(`<${kind}>${list.join("")}</${kind}>`); list = null; }
+    };
+    for (const raw of chunk.split("\n")) {
+      const line = raw.trim();
+      if (!line) continue;
+      const m = line.match(/^(- |\d+\. )(.*)$/);
+      if (m) {
+        const k = m[1] === "- " ? "ul" : "ol";
+        if (para.length) { out.push(`<p>${inline(para.join(" "))}</p>`); para = []; }
+        if (list && kind !== k) { out.push(`<${kind}>${list.join("")}</${kind}>`); list = null; }
+        if (!list) { list = []; kind = k; }
+        list.push(`<li>${inline(m[2])}</li>`);
+      } else {
+        if (list) { out.push(`<${kind}>${list.join("")}</${kind}>`); list = null; }
+        para.push(line);
+      }
+    }
+    flush();
+  }
+  return h("div", { class: "rich", html: out.join("") });
+}
+const track = id => D.tracks.find(t => t.id === id);
+const doneOf = t => (P.done[t.id] || []).filter(i => i < t.steps.length);
+function totalPct() {
+  const all = D.tracks.reduce((s, t) => s + t.steps.length, 0);
+  const done = D.tracks.reduce((s, t) => s + doneOf(t).length, 0);
+  return all ? Math.round(done * 100 / all) : 0;
+}
+function markDone(t, i) {
+  const list = P.done[t.id] || (P.done[t.id] = []);
+  if (!list.includes(i)) list.push(i);
+  save();
+}
+function bar(pct) { return h("div", { class: "bar", role: "progressbar", "aria-valuenow": pct, "aria-valuemin": 0, "aria-valuemax": 100 }, h("i", { style: `width:${pct}%` })); }
+function go(hash) {
+  if (location.hash.replace(/^#/, "") === hash.replace(/^#/, "")) render();
+  else location.hash = hash;
+}
+function stopAnim() { if (timer) { clearInterval(timer); timer = null; } }
+
+/* ---------- словарик: всплывающее объяснение ---------- */
+const sheet = document.getElementById("sheet");
+function showTerm(key) {
+  const text = D.glossary[key];
+  if (!text) return;
+  sheet.replaceChildren(h("div", { class: "in", role: "dialog", "aria-modal": "true", "aria-label": key },
+    h("h2", {}, key), h("p", {}, text),
+    h("div", { class: "row" },
+      h("button", { class: "btn main", type: "button", onclick: hideSheet }, "Понятно"),
+      h("button", { class: "btn ghost", type: "button", onclick: () => { hideSheet(); go("#glossary"); } }, "Весь словарик"))));
+  sheet.hidden = false;
+  sheet.querySelector("button").focus();
+}
+function hideSheet() { sheet.hidden = true; sheet.replaceChildren(); }
+sheet.addEventListener("click", e => { if (e.target === sheet) hideSheet(); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !sheet.hidden) hideSheet(); });
+view.addEventListener("click", e => {
+  const b = e.target.closest(".term");
+  if (b) showTerm(b.dataset.term);
+});
+
+/* ---------- копирование команд ---------- */
+function copyText(text, btn) {
+  const done = () => { btn.textContent = "✓"; setTimeout(() => { btn.textContent = "⧉"; }, 1500); };
+  const fallback = () => {
+    const ta = h("textarea", { style: "position:fixed;opacity:0" });
+    ta.value = text; document.body.append(ta); ta.select();
+    try { document.execCommand("copy"); done(); } catch (e) { /* выделите и скопируйте вручную */ }
+    ta.remove();
+  };
+  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, fallback);
+  else fallback();
+}
+function codeBlock(text) {
+  const btn = h("button", { class: "copy", type: "button", title: "Скопировать", "aria-label": "Скопировать команды" }, "⧉");
+  btn.addEventListener("click", () => copyText(text, btn));
+  return h("div", { class: "code" }, h("pre", {}, text), btn);
+}
+
+/* =====================================================================
+   Экраны
+   ===================================================================== */
+const LEVELS = ["Без железа — понять, как думает Дирижёр", "Инструменты — замер и пайка",
+  "Первая настоящая флешка, связки и покупки", "Ноутбук — микросхема BIOS", "Машина — только чтение",
+  "Телевизор и дальше"];
+
+function renderHome() {
+  const all = D.tracks.reduce((s, t) => s + t.steps.length, 0);
+  const done = D.tracks.reduce((s, t) => s + doneOf(t).length, 0);
+  const hero = h("section", { class: "card" },
+    h("h1", { tabindex: "-1" }, D.title), rich(D.say),
+    h("div", { class: "row small muted" }, `Пройдено шагов: ${done} из ${all}`), bar(totalPct()));
+  const last = P.last && P.last.split("/");
+  if (last && track(last[0]) && Number(last[1]) < track(last[0]).steps.length) {
+    const t = track(last[0]);
+    hero.append(h("p", {}, h("button", { class: "btn main", type: "button", onclick: () => go(`#${t.id}/${Number(last[1]) + 1}`) },
+      `Продолжить: ${t.title} · шаг ${Number(last[1]) + 1}`)));
+  }
+  view.append(hero);
+  const levels = [...new Set(D.tracks.map(t => t.level))].sort((a, b) => a - b);
+  for (const lv of levels) {
+    view.append(h("div", { class: "level" }, `Уровень ${lv} · ${LEVELS[lv] || ""}`));
+    view.append(h("div", { class: "tracks" }, D.tracks.filter(t => t.level === lv).map(t => {
+      const d = doneOf(t).length, pct = Math.round(d * 100 / t.steps.length);
+      return h("button", { class: "track" + (d === t.steps.length ? " done" : ""), type: "button", onclick: () => go("#" + t.id) },
+        h("span", { class: "ico", "aria-hidden": "true" }, t.icon || "•"),
+        h("b", {}, t.title + (d === t.steps.length ? " ✓" : "")),
+        h("small", {}, plain(t.tagline)),
+        h("span", { class: "meta" }, `${t.steps.length} шагов` + (t.minutes ? ` · ~${t.minutes} мин` : ""), bar(pct)));
+    })));
+  }
+  let armed = false;
+  const reset = h("button", { class: "btn ghost", type: "button" }, "Сбросить прогресс");
+  reset.addEventListener("click", () => {
+    if (!armed) { armed = true; reset.textContent = "Точно сбросить? Нажмите ещё раз"; setTimeout(() => { armed = false; reset.textContent = "Сбросить прогресс"; }, 3000); return; }
+    P = { done: {}, quiz: {}, tick: {} }; save(); render();
+  });
+  view.append(h("div", { class: "row", style: "margin-top:1.4rem" },
+    h("button", { class: "btn", type: "button", onclick: () => go("#glossary") }, `Словарик · ${Object.keys(D.glossary).length} терминов`), reset));
+}
+
+function renderTrack(t) {
+  const done = doneOf(t);
+  const first = t.steps.findIndex((s, i) => !done.includes(i));
+  const card = h("section", { class: "card" },
+    h("div", { class: "row" }, h("span", { style: "font-size:2rem", "aria-hidden": "true" }, t.icon || ""),
+      h("h1", { tabindex: "-1" }, t.title)),
+    h("p", { class: "muted" }, plain(t.tagline)),
+    h("div", { class: "chips" }, h("span", { class: "chip" }, `уровень ${t.level}`),
+      t.minutes ? h("span", { class: "chip" }, `~${t.minutes} мин`) : null,
+      h("span", { class: "chip" }, `${t.steps.length} шагов`),
+      done.length ? h("span", { class: "chip" }, `пройдено ${done.length}`) : null));
+  if ((t.needs || []).length) card.append(h("h3", {}, "Что понадобится"), h("ul", {}, t.needs.map(x => h("li", { html: inline(x) }))));
+  if ((t.learn || []).length) card.append(h("h3", {}, "Чему научитесь"), h("ul", {}, t.learn.map(x => h("li", { html: inline(x) }))));
+  card.append(h("p", {}, h("button", { class: "btn main", type: "button", onclick: () => go(`#${t.id}/${first < 0 ? 1 : first + 1}`) },
+    first < 0 ? "Пройти ещё раз" : first === 0 ? "Начать" : `Продолжить с шага ${first + 1}`)));
+  view.append(card);
+  view.append(h("section", { class: "card" }, h("h3", { style: "margin-top:0" }, "Шаги"),
+    h("ol", { class: "steps-list" }, t.steps.map((s, i) =>
+      h("li", { class: done.includes(i) ? "ok" : "" }, h("button", { type: "button", onclick: () => go(`#${t.id}/${i + 1}`) },
+        h("span", { class: "n" }, done.includes(i) ? "✓" : String(i + 1)), h("span", {}, plain(s.title))))))));
+  if ((t.links || []).length) {
+    view.append(h("section", { class: "card" }, h("h3", { style: "margin-top:0" }, "Источники"),
+      h("ul", {}, t.links.map(l => h("li", {}, h("a", { href: l.url, target: "_blank", rel: "noopener noreferrer" }, l.title))))));
+  }
+}
+
+function renderQuiz(t, i, q) {
+  const key = `${t.id}/${i}`;
+  const box = h("div", { class: "quiz" }, h("h3", {}, "Что сделаете?"), h("p", { html: inline(q.ask) }));
+  const opts = h("div", { class: "opts" });
+  const out = h("div", { "aria-live": "polite" });
+  const show = (chosen) => {
+    opts.replaceChildren(...q.options.map((o, j) => {
+      let cls = "opt";
+      if (chosen != null) {
+        if (j === chosen) cls += o.ok ? " good" : " badc";
+        else if (o.ok) cls += " right";
+      }
+      const b = h("button", { class: cls, type: "button", disabled: chosen != null }, plain(o.text));
+      b.addEventListener("click", () => { P.quiz[key] = j; save(); show(j); });
+      return b;
+    }));
+    out.replaceChildren();
+    if (chosen != null) {
+      const o = q.options[chosen];
+      out.append(h("div", { class: "say " + (o.ok ? "good" : "badc") },
+        h("b", {}, o.ok ? "Верно. " : "Не совсем. "), h("span", { html: inline(o.say || "") })));
+      if (!o.ok) out.append(h("p", { class: "small muted" }, "Правильный вариант отмечен пунктиром."));
+      out.append(h("button", { class: "btn ghost", type: "button", onclick: () => { delete P.quiz[key]; save(); show(null); } }, "Ответить ещё раз"));
+    }
+  };
+  show(P.quiz[key] != null && q.options[P.quiz[key]] ? P.quiz[key] : null);
+  box.append(opts, out);
+  return box;
+}
+
+const LINE_CLASS = [["══", "hdr"], ["[", "step"], ["✔", "ok"], ["⚠", "warn"], ["✖", "bad"], ["?", "ask"], ["!", "ask"], [">", "you"], ["•", "info"]];
+function lineClass(line) { const m = LINE_CLASS.find(([p]) => line.startsWith(p)); return m ? m[1] : ""; }
+
+function renderConsole(con) {
+  const box = h("div", { class: "quiz" }, h("h3", {}, "Сеанс вживую"), h("p", { html: inline(con.ask) }));
+  const cases = h("div", { class: "cases", role: "group" });
+  const term = h("div", { class: "term-out", "aria-label": "Протокол Дирижёра" }, h("div", { class: "info" }, "Выберите ситуацию выше."));
+  const res = h("div", { "aria-live": "polite" });
+  const skip = h("button", { class: "btn ghost", type: "button", hidden: true }, "Показать сразу");
+  const play = (c, btn) => {
+    stopAnim();
+    for (const b of cases.children) b.setAttribute("aria-pressed", String(b === btn));
+    term.replaceChildren(); res.replaceChildren();
+    const lines = c.lines.map(l => l.startsWith("~") ? l.slice(1) : l);
+    let n = 0;
+    const finish = () => {
+      stopAnim(); skip.hidden = true;
+      while (n < lines.length) term.append(h("div", { class: lineClass(lines[n]) }, lines[n++]));
+      term.scrollTop = term.scrollHeight;
+      res.replaceChildren(h("div", { class: "say good" }, h("b", {}, "Итог. "), h("span", { html: inline(c.result) })));
+    };
+    skip.onclick = finish; skip.hidden = false;
+    timer = setInterval(() => {
+      if (n >= lines.length) return finish();
+      term.append(h("div", { class: lineClass(lines[n]) }, lines[n++]));
+      term.scrollTop = term.scrollHeight;
+    }, 110);
+  };
+  con.cases.forEach(c => {
+    const b = h("button", { class: "case", type: "button", "aria-pressed": "false" }, c.label);
+    b.addEventListener("click", () => play(c, b));
+    cases.append(b);
+  });
+  box.append(cases, term, skip, res);
+  return box;
+}
+
+function renderStep(t, i) {
+  const s = t.steps[i], n = t.steps.length, done = doneOf(t);
+  P.last = `${t.id}/${i}`; save();
+  view.append(h("div", { class: "stephead" },
+    h("div", { class: "row" }, h("a", { href: "#" + t.id }, `${t.icon || ""} ${t.title}`), h("span", { class: "muted" }, `Шаг ${i + 1} из ${n}`)),
+    h("div", { class: "segs", "aria-hidden": "true" }, t.steps.map((x, j) => h("i", { class: j === i ? "now" : done.includes(j) ? "ok" : "" })))));
+  const card = h("section", { class: "card" }, h("h2", { tabindex: "-1" }, plain(s.title)), rich(s.text));
+  if (s.why) card.append(h("div", { class: "box why" }, h("b", {}, "Зачем"), h("span", { html: inline(s.why) })));
+  if (s.code) card.append(codeBlock(s.code));
+  if (s.dirizher) card.append(h("div", { class: "box drz" }, h("b", {}, "В Дирижёре"), h("span", { html: inline(s.dirizher) })));
+  if (s.warn) card.append(h("div", { class: "box warn" }, h("b", {}, "Осторожно"), h("span", { html: inline(s.warn) })));
+  if (s.verify) card.append(h("div", { class: "box verify" }, h("b", {}, "Проверить на железе"), h("span", { html: inline(s.verify) })));
+  if ((s.tick || []).length) {
+    card.append(h("ul", { class: "ticks" }, s.tick.map((x, j) => {
+      const key = `${t.id}/${i}/${j}`;
+      const cb = h("input", { type: "checkbox", checked: !!P.tick[key] });
+      cb.addEventListener("change", () => { if (cb.checked) P.tick[key] = true; else delete P.tick[key]; save(); });
+      return h("li", {}, h("label", {}, cb, h("span", { html: inline(x) })));
+    })));
+  }
+  if (s.console) card.append(renderConsole(s.console));
+  if (s.quiz) card.append(renderQuiz(t, i, s.quiz));
+  view.append(card);
+  const last = i === n - 1;
+  view.append(h("nav", { class: "nav", "aria-label": "Шаги" },
+    h("button", { class: "btn", type: "button", onclick: () => go(i ? `#${t.id}/${i}` : "#" + t.id) }, i ? "← Назад" : "← К маршруту"),
+    h("button", { class: "btn main", type: "button", onclick: () => { markDone(t, i); go(last ? `#${t.id}/done` : `#${t.id}/${i + 2}`); } },
+      last ? "Завершить ✓" : "Дальше →")));
+}
+
+function renderDone(t) {
+  const qs = t.steps.map((s, i) => [s, i]).filter(([s]) => s.quiz);
+  const answered = qs.filter(([, i]) => P.quiz[`${t.id}/${i}`] != null);
+  const right = answered.filter(([s, i]) => (s.quiz.options[P.quiz[`${t.id}/${i}`]] || {}).ok);
+  const card = h("section", { class: "card" },
+    h("h1", { tabindex: "-1" }, `${t.icon || ""} Маршрут пройден`), h("p", {}, t.title),
+    h("div", { class: "chips" }, h("span", { class: "chip" }, `шагов: ${doneOf(t).length} из ${t.steps.length}`),
+      qs.length ? h("span", { class: "chip" }, `верных ответов: ${right.length} из ${qs.length}`) : null));
+  if ((t.learn || []).length) card.append(h("h3", {}, "Что вы теперь умеете"), h("ul", {}, t.learn.map(x => h("li", { html: inline(x) }))));
+  const next = (t.next || []).map(track).filter(Boolean);
+  if (next.length) {
+    card.append(h("h3", {}, "Куда дальше"), h("div", { class: "row" }, next.map(n =>
+      h("button", { class: "btn", type: "button", onclick: () => go("#" + n.id) }, `${n.icon || ""} ${n.title}`))));
+  }
+  card.append(h("p", { style: "margin-top:1.2rem" }, h("button", { class: "btn main", type: "button", onclick: () => go("#") }, "Все маршруты")));
+  view.append(card);
+}
+
+function renderGlossary() {
+  const keys = Object.keys(D.glossary).sort((a, b) => a.localeCompare(b, "ru"));
+  const list = h("dl", { class: "gl" });
+  const fill = q => {
+    q = q.trim().toLowerCase();
+    list.replaceChildren(...keys.filter(k => !q || k.toLowerCase().includes(q) || D.glossary[k].toLowerCase().includes(q))
+      .flatMap(k => [h("dt", {}, k), h("dd", {}, D.glossary[k])]));
+  };
+  const input = h("input", { class: "search", type: "search", placeholder: "Найти термин…", "aria-label": "Найти термин" });
+  input.addEventListener("input", () => fill(input.value));
+  view.append(h("section", { class: "card" }, h("h1", { tabindex: "-1" }, "Словарик"),
+    h("p", { class: "muted" }, "Термины простыми словами. В тексте шагов они подчёркнуты — на них можно нажать."), input, list));
+  fill("");
+}
+
+function render() {
+  stopAnim();
+  hideSheet();
+  view.replaceChildren();
+  document.getElementById("total").textContent = totalPct() + "%";
+  const hash = decodeURIComponent(location.hash.replace(/^#/, ""));
+  const [tid, part] = hash.split("/");
+  const t = tid && track(tid);
+  if (hash === "glossary") renderGlossary();
+  else if (t && part === "done") renderDone(t);
+  else if (t && part && Number(part) >= 1 && Number(part) <= t.steps.length) renderStep(t, Number(part) - 1);
+  else if (t) renderTrack(t);
+  else renderHome();
+  document.title = (t ? t.title + " — " : "") + "Учебная площадка — Дирижёр";
+  window.scrollTo(0, 0);
+  const head = view.querySelector("[tabindex='-1']");
+  if (head) head.focus({ preventScroll: true });
+}
+
+document.getElementById("toHome").addEventListener("click", () => go("#"));
+window.addEventListener("hashchange", render);
+
+(async function start() {
+  if (window.PLAYGROUND_STANDALONE) document.getElementById("toApp").hidden = true;
+  try {
+    D = window.PLAYGROUND || await fetch("playground.json", { cache: "no-store" }).then(r => {
+      if (!r.ok) throw new Error("сервер ответил " + r.status);
+      return r.json();
+    });
+  } catch (e) {
+    view.replaceChildren(h("section", { class: "card" }, h("h1", {}, "Не удалось загрузить тренажёр"),
+      h("p", {}, String(e.message || e)),
+      h("p", { class: "muted" }, "На приборе: python3 -m dirizher doctor. Отдельный файл: python3 -m dirizher playground --export тренажёр.html")));
+    return;
+  }
+  render();
+})();
+</script>
+</body>
+</html>
