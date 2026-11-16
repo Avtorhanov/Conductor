@@ -201,6 +201,10 @@ def build_parser() -> argparse.ArgumentParser:
     ca = sub.add_parser("catalog", help="справочник: движки (авторы, как работают) и переходники (как подключить)")
     ca.add_argument("card", nargs="?", help="id карточки, например ch341a или flashrom")
     ca.add_argument("--kind", choices=["engine", "adapter", "diy"], help="только движки, переходники или «собрать»")
+    pg = sub.add_parser("playground", help="учебная площадка: пошаговый тренажёр — ноутбук, ТВ, телефон, машина, связки")
+    pg.add_argument("track", nargs="?", help="маршрут, например laptop, car, first_chip (без него — список)")
+    pg.add_argument("--export", metavar="ФАЙЛ",
+                    help="сохранить тренажёр одним HTML-файлом: открывается в браузере без сети и без прибора")
     hp = sub.add_parser("help", help="справка: статьи и уроки (без слов — список)")
     hp.add_argument("words", nargs="*", help="поиск или имя статьи")
     sm = sub.add_parser("sim", help="управление виртуальной микросхемой (учебные поломки)")
@@ -225,6 +229,30 @@ def cmd_help(cfg, words: list) -> int:
         name = {"article": it["id"], "card": f"catalog {it.get('card')}"}.get(it["kind"]) or f"(урок) {it.get('lesson')}"
         ui.out(f" • {it['title']}  [{name}]")
     ui.info("статья целиком: python3 -m dirizher help <имя>")
+    return 0
+
+
+def cmd_playground(track_id, export) -> int:
+    from .interface import playground
+    ui = ConsoleUI()
+    try:
+        data = playground.load()
+    except playground.PlaygroundError as e:
+        ui.error(str(e))
+        return 1
+    if export:
+        dest = Path(export).expanduser()
+        dest.write_text(playground.standalone(data), encoding="utf-8")
+        ui.ok(f"тренажёр сохранён одним файлом: {dest} ({dest.stat().st_size // 1024} КБ) — "
+              f"откройте в любом браузере, сеть и прибор не нужны")
+        return 0
+    if track_id and playground.track(data, track_id) is None:
+        ui.error(f"маршрута «{track_id}» нет: " + ", ".join(t["id"] for t in data["tracks"]))
+        return 1
+    try:
+        playground.run_text(ui, data, track_id)
+    except KeyboardInterrupt:
+        ui.out()
     return 0
 
 
@@ -275,6 +303,8 @@ def main(argv=None) -> int:
         return cmd_help(cfg, args.words)
     if args.cmd == "catalog":
         return cmd_catalog(cfg, args.card, args.kind)
+    if args.cmd == "playground":
+        return cmd_playground(args.track, args.export)
     ui = ConsoleUI()
     c = Conductor(cfg, ui, sim=args.sim, dry_run=getattr(args, "dry_run", False))
     try:

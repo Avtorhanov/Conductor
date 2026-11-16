@@ -27,6 +27,7 @@
 - `dirizher/workshop/catalog.py` + `catalog/engines|adapters/*.yaml` — справочник: движки (авторы, лицензии, принцип) и переходники (рисунки — данными: wiring, package, header, chain). Навык может принести карточки в `skills/<id>/catalog/`.
 - `tools/build_pages.py` + `tools/pages_demo.js` — демо для GitHub Pages: записывает ходы настоящего ядра на симуляторе; публикует `.github/workflows/pages.yml`.
 - `dirizher/interface/` — слой поверх ядра: `guide.yaml` + `guide.py` (Штурман: вопросы, подсказки, уроки), `web.py` + `static/index.html` (браузер), `wizard.py` (терминал), `builder.py` (конструктор профиля). Ядро о нём не знает: интерфейс подставляет свой `ui`.
+- `dirizher/interface/playground.yaml` + `playground.py` + `static/playground.html` — учебная площадка (тренажёр по маршрутам: данные, проверка, текстовый режим, страница; `python3 -m dirizher playground [--export файл]`). Строки «сеансов вживую» сверяются с ядром в `tests/test_playground.py`.
 
 ## Жёсткие правила
 - `probe()` только читает. Никакой записи без копии «до», сверки, копии «после» и подтверждения словом.

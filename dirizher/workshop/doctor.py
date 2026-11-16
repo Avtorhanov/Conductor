@@ -132,6 +132,12 @@ def check(cfg: dict, sim: bool = False, deep: bool = True, hood: Hood | None = N
             guide.load_guide()
         except Exception as e:
             issues.append(_file_issue(hood, "dirizher/interface/guide.yaml", "Штурман не загружается", str(e)[:400]))
+        from ..interface import playground
+        try:
+            playground.load()
+        except Exception as e:
+            issues.append(_file_issue(hood, "dirizher/interface/playground.yaml", "Учебная площадка не загружается",
+                                      str(e)[:400]))
         # 7. справочник: карточки движков и переходников
         from . import catalog
         cards, card_errors = catalog.load(cfg)

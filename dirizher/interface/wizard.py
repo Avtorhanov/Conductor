@@ -148,6 +148,8 @@ class Wizard:
             return self.fix(params.get("session"), params.get("fix"))
         if name == "catalog":
             return self.catalog(params.get("card"), params.get("kind"))
+        if name == "playground":
+            return self.playground(params.get("track"))
         meta = guide.ACTIONS[name]
         if meta.get("pick") and "session" not in params:
             sid = self.pick(meta["pick"])
@@ -216,6 +218,17 @@ class Wizard:
         items = [i for i in helpdocs.search(helpdocs.articles(self.cfg, with_lessons=False, with_cards=False))]
         idx = self.ui.choose("Справка (Enter — назад)", [i["title"] for i in items])
         return None if idx is None else self.help(items[idx]["id"])
+
+    def playground(self, track_id: str | None = None):
+        """Учебная площадка в терминале: маршрут → шаги → вопросы с объяснением ответа."""
+        from . import playground
+        try:
+            data = playground.load()
+        except playground.PlaygroundError as e:
+            self.ui.error(str(e))
+            return None
+        playground.run_text(self.ui, data, track_id)
+        return None
 
     def catalog(self, card_id: str | None = None, kind: str | None = None):
         """Справочник в терминале: список → карточка с рисунками строками."""

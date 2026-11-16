@@ -33,7 +33,7 @@ sys.path.insert(0, str(ROOT))
 
 from dirizher import __version__  # noqa: E402
 from dirizher.core.config import load_config  # noqa: E402
-from dirizher.interface import web  # noqa: E402
+from dirizher.interface import playground, web  # noqa: E402
 from dirizher.plugins.simulator import SimulatorPlugin  # noqa: E402
 from dirizher.workshop import helpdocs  # noqa: E402
 from dirizher.workshop.hood import AREAS  # noqa: E402
@@ -301,6 +301,9 @@ def build_page(out: Path) -> None:
     # Установка демо как приложения (PWA): те же файлы, что отдаёт прибор (web.APP_FILES).
     for name in web.APP_FILES:
         shutil.copyfile(web.STATIC / name, out / name)
+    # Учебная площадка: та же страница, что на приборе, и её данные (playground.yaml → JSON).
+    shutil.copyfile(playground.PAGE_PATH, out / "playground.html")
+    (out / "playground.json").write_text(playground.to_json(playground.load()), encoding="utf-8")
     (out / ".nojekyll").write_text("", encoding="utf-8")
 
 

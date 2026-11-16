@@ -64,6 +64,8 @@ ACTIONS = {
     "fix": {"job": False, "params": {"session", "fix"}, "title": "Что помогло"},
     # 0.5.0 — справочник движков и переходников
     "catalog": {"job": False, "params": {"card", "kind"}, "title": "Справочник"},
+    # 0.6.0 — учебная площадка (тренажёр по маршрутам: ноутбук, ТВ, телефон, машина, связки)
+    "playground": {"job": False, "params": {"track"}, "title": "Учебная площадка"},
 }
 PICK_PURPOSES = ("rollback", "feedback", "reference", "export")
 LESSON_GROUPS = ("work", "dev")
@@ -127,6 +129,8 @@ def _check_option(opt, where: str, g: dict, errors: list) -> None:
             errors.append(f"{where} «{opt['label']}»: card — id карточки справочника")
         if params.get("kind") not in (None, *CATALOG_KINDS):
             errors.append(f"{where} «{opt['label']}»: kind — одно из {', '.join(CATALOG_KINDS)}")
+        if "track" in params and not isinstance(params["track"], str):
+            errors.append(f"{where} «{opt['label']}»: track — id маршрута учебной площадки")
         if "set" in params and not isinstance(params["set"], dict):
             errors.append(f"{where} «{opt['label']}»: set — словарь «параметр: значение»")
 

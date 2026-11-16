@@ -674,6 +674,7 @@ function optTag(o) {
   if (o.action === "tune") return p.dry_run ? ["без записи", "tag-ok"] : ["запись после «ДА»", "tag-warn"];
   if (o.action === "tune_form") return ["запись после «ДА»", "tag-warn"];
   if (o.action === "help") return ["справка", "tag-info"];
+  if (o.action === "playground") return ["тренажёр", "tag-info"];
   return null;
 }
 
@@ -718,6 +719,8 @@ const VIEW_ACTIONS = {
     if (p.card) return openPage(v => renderCard(v, p.card));
     S.catKind = p.kind || ""; S.catQ = ""; showTab("catalog");
   },
+  /* учебная площадка — отдельная страница рядом с этой (на приборе, в демо и в приложении) */
+  playground: p => { location.href = "playground.html" + (p.track ? "#" + encodeURIComponent(p.track) : ""); },
 };
 const PICK = { rollback: "rollback", feedback: "feedback", reference: "reference", export: "export" };
 
