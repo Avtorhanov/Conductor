@@ -3,6 +3,7 @@ kind: engine
 title: OpenOCD
 tagline: Отладка и запись микроконтроллеров через JTAG/SWD — с огромным выбором адаптеров
 group: tool
+level: 3
 icon: probe
 since: "2005"
 lang: C, Tcl

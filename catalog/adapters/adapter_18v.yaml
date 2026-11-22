@@ -3,6 +3,7 @@ kind: adapter
 title: Переходник 1,8 В для 25xx
 tagline: Для флешек на 1,8 В (25U…, W25Q…FW/JW) — понижает питание и уровни сигналов
 group: buy
+level: 2
 icon: socket
 voltage: "1,8 В"
 engines: [flashrom]

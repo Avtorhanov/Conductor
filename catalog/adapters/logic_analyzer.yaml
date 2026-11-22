@@ -3,6 +3,7 @@ kind: adapter
 title: Логический анализатор 8 каналов (fx2lafw)
 tagline: Посмотреть, читает ли процессор флешку — только слушает, ничего не пишет
 group: buy
+level: 4
 icon: scope
 voltage: "входы до 5 В"
 usb: "0925:3881, 1d50:608c"

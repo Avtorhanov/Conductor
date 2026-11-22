@@ -3,6 +3,7 @@ kind: adapter
 title: SPI самого Raspberry Pi (собрать)
 tagline: Без программатора — шесть проводов от гребёнки Pi к флешке 25xx
 group: diy
+level: 2
 icon: board
 voltage: "3,3 В (логика Raspberry Pi)"
 engines: [flashrom]

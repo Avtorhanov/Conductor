@@ -3,6 +3,7 @@ kind: engine
 title: Python
 tagline: Язык, на котором написан Дирижёр — ядро, интерфейсы, помощники
 group: base
+level: 5
 icon: code
 since: "1991"
 lang: C

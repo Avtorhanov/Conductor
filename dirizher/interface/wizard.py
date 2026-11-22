@@ -253,8 +253,8 @@ class Wizard:
         shown = catalog.search(cards, "", kind or "")
         for path, err in errors:
             self.ui.error(f"{path}: {err}")
-        idx = self.ui.choose("Справочник: движки и переходники (Enter — назад)",
-                             [f"{c['title']} · {c['group_title'].lower()} — {c['tagline']}" for c in shown])
+        idx = self.ui.choose("Справочник от простого к сложному, [ступень] (Enter — назад)",
+                             [f"[{c['level']}] {c['title']} · {c['group_title'].lower()} — {c['tagline']}" for c in shown])
         return None if idx is None else self.catalog(shown[idx]["id"])
 
     def hood(self):

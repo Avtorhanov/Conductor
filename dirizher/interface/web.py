@@ -882,7 +882,7 @@ def api_catalog(h: Handler, q):
     h.send_json({
         "items": [catalog.public(c) for c in shown], "total": len(cards),
         "errors": [{"path": p, "error": e} for p, e in errors],
-        "kinds": catalog.KINDS, "groups": catalog.GROUPS, "targets": catalog.TARGETS,
+        "kinds": catalog.KINDS, "groups": catalog.GROUPS, "targets": catalog.TARGETS, "levels": catalog.levels_public(),
         "colors": catalog.COLORS, "icons": list(catalog.ICONS), "overview": catalog.overview(cards),
         "engines": [{"id": c["id"], "title": c["title"]} for c in cards if c["kind"] == "engine"],
         "adapters": [{"id": c["id"], "title": c["title"]} for c in cards if c["kind"] == "adapter"],

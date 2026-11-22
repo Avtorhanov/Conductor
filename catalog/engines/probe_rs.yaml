@@ -3,6 +3,7 @@ kind: engine
 title: probe-rs
 tagline: Читает и пишет флеш микроконтроллеров ARM Cortex-M и RISC-V по SWD/JTAG
 group: tool
+level: 3
 icon: probe
 since: "2019"
 lang: Rust

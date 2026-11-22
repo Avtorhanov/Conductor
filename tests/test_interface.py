@@ -611,6 +611,43 @@ class MobileLayoutTests(unittest.TestCase):
         self.assertIn('aria-label="Справочник"', self.html)
         self.assertIn("@media (max-width: 480px) and (min-height: 521px)", self.html)  # экраны прибора не задеты
 
+    def media(self, query: str) -> str:
+        """Тело блока @media целиком (до закрывающей скобки на отдельной строке)."""
+        self.assertIn("@media " + query + " {", self.html)
+        return self.html.split("@media " + query + " {", 1)[1].split("\n}\n", 1)[0]
+
+    def test_landscape_keeps_tab_labels(self):
+        """Телефон в альбомной ориентации (высота ≤ 520 px): подписи разделов видны — и внизу, и в боковом меню."""
+        low = self.media("(max-height: 520px)")
+        self.assertNotIn(".tab span { display: none", low)      # раньше подписи прятались целиком
+        self.assertIn("flex-direction: row", low)                # значок и слово в одну строку — меню не выше
+        self.assertNotIn(".tab span { display: none", self.html)
+        narrow = self.media("(max-height: 520px) and (max-width: 600px)")
+        self.assertIn("flex-direction: column", narrow)          # 480×320: значок над словом
+        short = self.media("(max-height: 520px) and (max-width: 899px)")
+        self.assertIn(".tab .short { display: inline; }", short) # «Каталог» целиком в низком меню
+        side = self.media("(min-width: 900px) and (max-height: 520px)")
+        self.assertIn("min-height: 2.6rem", side)                 # боковое меню: все шесть кнопок на низком экране
+        # вырез экрана iPhone сбоку: шапка, содержимое и меню отступают от него
+        for sel in (".top", "main", ".tabs"):
+            with self.subTest(sel=sel):
+                block = self.block(sel)
+                self.assertIn("env(safe-area-inset-left)", block)
+                self.assertIn("env(safe-area-inset-right)", block)
+
+    def test_catalog_page_goes_by_levels(self):
+        page = self.html.split("async function renderCatalog(v) {", 1)[1].split("\n}\n", 1)[0]
+        # отмеченные разделы остались: фильтры «Все / Переходники / Собрать / Движки»
+        self.assertIn('[["", "Все"], ["adapter", "Переходники"], ["diy", "Собрать"], ["engine", "Движки"]]', page)
+        self.assertIn("r.levels", page)                          # ступени — из данных справочника
+        self.assertIn('"level-" + lv.n', page)                    # у каждой ступени своя карточка-якорь
+        self.assertIn('class: "ladder"', page)                    # лестница 1 → 5 вверху
+        for sub in ("Купить и подключить", "Собрать или доработать", "Движки", "Основа Дирижёра"):
+            self.assertIn('"' + sub + '"', page)                  # внутри ступени — прежние разделы
+        mapping = self.html.split("async function renderCatalogMap(v) {", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("map-level", mapping)                      # «Как всё связано» — тоже по ступеням
+        self.assertIn('select("level", "Ступень сложности"', self.html)   # конструктор карточки
+
     def test_copy_is_icon_beside_code(self):
         box = self.html.split("function codeBox(code) {", 1)[1].split("\n}\n", 1)[0]
         self.assertIn('"aria-label": "Копировать команду"', box)

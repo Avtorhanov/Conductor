@@ -3,6 +3,7 @@ kind: adapter
 title: USBasp
 tagline: Недорогой USB-программатор AVR по ISP — ATmega, ATtiny, Arduino
 group: buy
+level: 3
 icon: usb
 voltage: "5 В (на многих есть перемычка 3,3 В)"
 usb: "16c0:05dc"

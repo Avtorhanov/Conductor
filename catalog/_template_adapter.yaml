@@ -7,6 +7,8 @@ kind: adapter
 title: "Название переходника"
 tagline: "Одна строка: для чего"
 group: buy                    # buy — купить; diy — собрать самому; mod — купить и доработать
+# level: 2                    # ступень сложности 1–5: 1 первая флешка, 2 другие напряжения и шины,
+                              # 3 микроконтроллеры, 4 приборы и замеры, 5 под капотом (пусто — по targets)
 icon: usb                     # chip usb clip board probe cable socket scope code db wave plug
 voltage: "3.3 В"              # логика / питание
 usb: "1a86:5512"              # VID:PID из lsusb (если это USB-устройство)

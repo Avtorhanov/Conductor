@@ -3,6 +3,7 @@ kind: engine
 title: minipro
 tagline: Открытая программа для программаторов XGecu T48 / TL866II+ — память в панельке
 group: tool
+level: 2
 icon: socket
 since: "2014"
 lang: C

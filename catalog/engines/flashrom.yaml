@@ -4,6 +4,7 @@ kind: engine
 title: flashrom
 tagline: Читает, пишет и сверяет SPI-флешки 25xx — роутеры, ТВ-приставки, материнские платы
 group: tool
+level: 1
 icon: chip
 lang: C
 license: GPL-2.0 (часть файлов — GPL-2.0 или новее)

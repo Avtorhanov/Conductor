@@ -3,6 +3,7 @@ kind: adapter
 title: Переходник SOIC-8 → DIP-8
 tagline: Для выпаянной микросхемы — вставить в панель CH341A или T48
 group: buy
+level: 1
 icon: socket
 engines: [flashrom, minipro]
 targets: [memory.spi_nor, memory.i2c_eeprom]

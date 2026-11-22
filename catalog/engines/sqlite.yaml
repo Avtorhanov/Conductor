@@ -3,6 +3,7 @@ kind: engine
 title: SQLite
 tagline: Память Дирижёра — сеансы, события, снимки, эталоны, «что помогло»
 group: base
+level: 5
 icon: db
 since: "2000"
 lang: C

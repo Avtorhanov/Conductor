@@ -3,6 +3,7 @@ kind: engine
 title: binwalk
 tagline: Показывает, что лежит внутри дампа — загрузчик, ядро, файловая система
 group: tool
+level: 4
 icon: db
 since: "2010"
 lang: "Rust (v3), Python (v2)"

@@ -3,6 +3,7 @@ kind: adapter
 title: Переходник USB–RS-485
 tagline: Для приборов Modbus RTU — термопреобразователей, регуляторов, счётчиков
 group: buy
+level: 4
 icon: cable
 voltage: "дифференциальная линия A/B (развязка — желательна)"
 engines: [modbus_rtu]
