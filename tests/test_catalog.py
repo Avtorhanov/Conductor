@@ -83,6 +83,50 @@ class CardTests(Base):
                 for link in c["links"]:
                     self.assertTrue(link["url"].startswith("https://"))
 
+    def test_levels_go_from_simple_to_complex(self):
+        """Справочник по ступеням: от первой флешки (1) до капота (5); внутри — купить, собрать, движки, основа."""
+        cards, _ = self.cards()
+        self.assertEqual(list(catalog.LEVELS), [1, 2, 3, 4, 5])
+        for c in cards:
+            with self.subTest(card=c["id"]):
+                raw = yaml.safe_load((self.root / c["path"]).read_text(encoding="utf-8"))
+                self.assertIn(raw.get("level"), catalog.LEVELS, "у каждой встроенной карточки ступень указана явно")
+                self.assertEqual(c["level_title"], catalog.LEVELS[c["level"]]["title"])
+        levels = [c["level"] for c in cards]
+        self.assertEqual(levels, sorted(levels), "карточки идут по ступеням")
+        self.assertEqual(cards[0]["id"], "ch341a", "первым — самый доступный программатор")
+        lv = {c["id"]: c["level"] for c in cards}
+        self.assertEqual({k for k, v in lv.items() if v == 1}, {"ch341a", "soic8_clip", "soic8_socket", "flashrom"})
+        self.assertEqual({k for k, v in lv.items() if v == 5}, {"python", "pyyaml", "sqlite"})
+        self.assertLess(lv["adapter_18v"], lv["usbasp"])
+        self.assertLess(lv["st_link_v2"], lv["usb_rs485"])
+        groups = [catalog.GROUP_ORDER[c["group"]] for c in cards if c["level"] == 3]
+        self.assertEqual(groups, sorted(groups), "внутри ступени: купить → собрать → движки")
+        # «Как всё связано» — в том же порядке, переходники в строке тоже от простого к сложному
+        rows = catalog.overview(cards)
+        self.assertEqual([r["level"] for r in rows], sorted(r["level"] for r in rows))
+        self.assertEqual(rows[0]["target"], "memory.spi_nor")
+        spi = next(r for r in rows if r["engine"] == "flashrom")
+        ids = [a["id"] for a in spi["adapters"]]
+        self.assertLess(ids.index("ch341a"), ids.index("adapter_18v"))
+        self.assertEqual([x["n"] for x in catalog.levels_public()], [1, 2, 3, 4, 5])
+        self.assertTrue(all(x["short"] and x["about"] for x in catalog.levels_public()))
+
+    def test_level_field_checked_and_defaulted(self):
+        base = {"id": "ok_card", "kind": "adapter", "title": "т", "tagline": "т"}
+        for bad in (0, 6, "2", True, 2.5):
+            with self.subTest(level=bad):
+                self.assertTrue(any("level" in e for e in catalog.validate(dict(base, level=bad))))
+        self.assertEqual(catalog.validate(dict(base, level=4)), [])
+        self.assertEqual(catalog.level_of(dict(base, level=4)), 4)
+        self.assertEqual(catalog.level_of(dict(base, targets=["mcu.arm", "memory.i2c_eeprom"])), 2,
+                         "без level — по самому простому виду микросхем")
+        self.assertEqual(catalog.level_of(dict(base, kind="engine", group="base")), 5)
+        self.assertEqual(catalog.level_of(base), catalog.DEFAULT_LEVEL)
+        self.write_card("catalog/adapters/no_level.yaml", dict(base, id="no_level", targets=["device.modbus"],
+                                                                steps=["x"]))
+        self.assertEqual(catalog.get(self.cards()[0], "no_level")["level"], 4)
+
     def test_engine_plugins_exist(self):
         cards, _ = self.cards()
         from dirizher.core.registry import discover
@@ -165,6 +209,7 @@ class CardTests(Base):
         lines = "\n".join(catalog.text(catalog.get(cards, "openocd"), cards))
         self.assertIn("Dominic Rath", lines)
         self.assertIn("лицензия: GPL-2.0", lines)
+        self.assertIn("ступень 3 из 5 · Микроконтроллеры", lines)
 
     def test_guide_points_to_existing_cards(self):
         cards, _ = self.cards()
@@ -205,6 +250,10 @@ class AddTests(Base):
         self.assertEqual(eng["errors"], [])
         self.assertEqual(eng["card"]["authors"][0], {"name": "Команда pyOCD", "role": "разработка"})
         self.assertEqual(eng["card"]["examples"][0]["note"], "какие отладчики видны")
+        self.assertEqual(catalog.preview(self.cfg, dict(GOOD_ADAPTER, level="3"))["card"]["level"], 3)
+        self.assertEqual(yaml.safe_load(catalog.preview(self.cfg, dict(GOOD_ADAPTER, level="3"))["yaml"])["level"], 3)
+        self.assertNotIn("level", yaml.safe_load(res["yaml"]), "«авто» — поле не пишется, ступень по видам микросхем")
+        self.assertTrue(catalog.preview(self.cfg, dict(GOOD_ADAPTER, level="9"))["errors"])
 
     def test_create_through_hood_loads_and_never_overwrites(self):
         rel = catalog.create(self.hood, self.cfg, GOOD_ADAPTER, actor="тест")
@@ -298,6 +347,8 @@ class InterfaceTests(Base):
         self.assertIn("red", d["colors"])
         self.assertTrue(d["overview"])
         self.assertNotIn("_text", d["items"][0])
+        self.assertEqual([x["n"] for x in d["levels"]], [1, 2, 3, 4, 5])
+        self.assertEqual((d["items"][0]["id"], d["items"][0]["level"]), ("ch341a", 1))
         st, d = self.req("GET", "/api/catalog/card?id=bus_pirate5&sim=1")
         self.assertEqual(st, 200)
         self.assertTrue(d["editable"])
@@ -347,6 +398,13 @@ class InterfaceTests(Base):
         text = out.getvalue()
         self.assertIn("Carl-Daniel Hailfinger", text)
         self.assertIn("probe_rs", text)
+        self.assertTrue(shown[0].startswith("[2] "), "в мастере у каждой карточки — номер ступени")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            cli.main(["--config", str(self.root / "config.yaml"), "catalog"])
+        heads = [ln.strip() for ln in out.getvalue().splitlines() if ln.strip()[:2] in ("1.", "2.", "3.", "4.", "5.")]
+        self.assertEqual([h[:2] for h in heads], ["1.", "2.", "3.", "4.", "5."], "список в терминале — по ступеням")
+        self.assertIn("Первая флешка", heads[0])
 
 
 # ======================= демо для GitHub Pages =======================

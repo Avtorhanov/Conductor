@@ -3,6 +3,7 @@ kind: adapter
 title: XGecu T48 / TL866II+
 tagline: Программатор с панелью ZIF-40 — EEPROM, флешки, параллельная память
 group: buy
+level: 2
 icon: socket
 usb: "a466:0a53"
 engines: [minipro]

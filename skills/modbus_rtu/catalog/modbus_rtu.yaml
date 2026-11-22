@@ -4,6 +4,7 @@ kind: engine
 title: Modbus RTU (помощник Дирижёра)
 tagline: Настройки приборов по RS-485 — термопреобразователи, регуляторы, счётчики
 group: tool
+level: 4
 icon: wave
 since: "1979"
 lang: Python (stdlib)

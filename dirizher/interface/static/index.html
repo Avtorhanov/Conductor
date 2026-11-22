@@ -38,7 +38,7 @@ if ("serviceWorker" in navigator && location.protocol === "https:") {
   --font-head: "Exo 2", "Jura", var(--font-body);
   /* форма и объём */
   --top-bg: #08112a; --edge: transparent; --card-gap: 1.3rem; --opts-gap: .8rem; --list-gap: .6rem;
-  --tabs-bg: #08112a; --tabs-pad: .55rem .6rem .6rem; --tabs-gap: .5rem; --tabs-inner: 1.15rem; --tabs-gap-wide: .75rem;
+  --tabs-bg: #08112a; --tabs-pad: .55rem .6rem .6rem; --tabs-side: .6rem; --tabs-gap: .5rem; --tabs-inner: 1.15rem; --tabs-gap-wide: .75rem;
   --tab-bg: #132550; --tab-on-bg: #1f3d7a; --tab-on-ink: #ffffff; --tab-radius: 14px; --tab-lift: translateY(-2px);
   --seg-bg: #060b1a; --seg-pad: 3px; --seg-radius: 999px; --seg-btn-bg: transparent; --seg-btn-radius: 999px;
   --sh-raised: 4px 6px 0 #02050f, 10px 16px 24px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.1), inset 0 -3px 0 rgba(0,0,0,.28);
@@ -59,7 +59,7 @@ if ("serviceWorker" in navigator && location.protocol === "https:") {
   --info-bg: rgba(106,169,245,.12); --sim-bg: rgba(180,140,242,.14);
   --radius: 14px; --font-head: var(--font-body);
   --top-bg: var(--bg); --edge: var(--line); --card-gap: 1rem; --opts-gap: .55rem; --list-gap: .4rem;
-  --tabs-bg: var(--surface); --tabs-pad: 0; --tabs-gap: 0; --tabs-inner: 0px; --tabs-gap-wide: .25rem;
+  --tabs-bg: var(--surface); --tabs-pad: 0; --tabs-side: 0px; --tabs-gap: 0; --tabs-inner: 0px; --tabs-gap-wide: .25rem;
   --tab-bg: transparent; --tab-on-bg: var(--surface); --tab-on-ink: var(--accent); --tab-radius: 10px; --tab-lift: none;
   --seg-bg: transparent; --seg-pad: 0; --seg-radius: 12px; --seg-btn-bg: var(--surface2); --seg-btn-radius: 0;
   --sh-raised: none; --sh-on: none; --sh-card: none; --sh-item: none; --sh-press: none; --sh-sunken: none;
@@ -75,7 +75,7 @@ if ("serviceWorker" in navigator && location.protocol === "https:") {
     --info-bg: rgba(106,169,245,.12); --sim-bg: rgba(180,140,242,.14);
     --radius: 14px; --font-head: var(--font-body);
     --top-bg: var(--bg); --edge: var(--line); --card-gap: 1rem; --opts-gap: .55rem; --list-gap: .4rem;
-    --tabs-bg: var(--surface); --tabs-pad: 0; --tabs-gap: 0; --tabs-inner: 0px; --tabs-gap-wide: .25rem;
+    --tabs-bg: var(--surface); --tabs-pad: 0; --tabs-side: 0px; --tabs-gap: 0; --tabs-inner: 0px; --tabs-gap-wide: .25rem;
     --tab-bg: transparent; --tab-on-bg: var(--surface); --tab-on-ink: var(--accent); --tab-radius: 10px; --tab-lift: none;
     --seg-bg: transparent; --seg-pad: 0; --seg-radius: 12px; --seg-btn-bg: var(--surface2); --seg-btn-radius: 0;
     --sh-raised: none; --sh-on: none; --sh-card: none; --sh-item: none; --sh-press: none; --sh-sunken: none;
@@ -101,6 +101,8 @@ a { color: var(--info); }
   position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: .6rem;
   padding: calc(.55rem + env(safe-area-inset-top)) 1rem .55rem; background: var(--top-bg);
   border-bottom: 1px solid var(--line);
+  /* iPhone в альбомной ориентации: вырез экрана сбоку — края отступают от него (в портрете вставки = 0) */
+  padding-left: max(1rem, env(safe-area-inset-left)); padding-right: max(1rem, env(safe-area-inset-right));
 }
 /* Всё, что выше края экрана, залито цветом шапки. На iPhone (Safari iOS 26) страница рисуется и под строкой
    состояния — без этой заливки там просвечивают прокручиваемые карточки. Полоса демо не закрывается:
@@ -121,11 +123,15 @@ a { color: var(--info); }
 .pill.sim .dot { background: var(--sim); }
 .net { font-size: .8rem; color: var(--bad); }
 
-main { padding: 1rem 1rem calc(var(--tabs-h) + 1.5rem + env(safe-area-inset-bottom)); max-width: 880px; margin: 0 auto; }
+main {
+  padding: 1rem 1rem calc(var(--tabs-h) + 1.5rem + env(safe-area-inset-bottom)); max-width: 880px; margin: 0 auto;
+  padding-left: max(1rem, env(safe-area-inset-left)); padding-right: max(1rem, env(safe-area-inset-right));
+}
 .tabs {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
   background: var(--tabs-bg); border-top: 1px solid var(--line); gap: var(--tabs-gap);
   padding: var(--tabs-pad); padding-bottom: calc(env(safe-area-inset-bottom) + var(--tabs-inner) / 2);
+  padding-left: max(var(--tabs-side), env(safe-area-inset-left)); padding-right: max(var(--tabs-side), env(safe-area-inset-right));
 }
 /* то же снизу: под меню (полоса жеста iPhone, оттягивание) не видно прокручиваемых карточек */
 .tabs::after {
@@ -158,16 +164,20 @@ main { padding: 1rem 1rem calc(var(--tabs-h) + 1.5rem + env(safe-area-inset-bott
   .tabs {
     position: sticky; top: 3.4rem; align-self: start; grid-template-columns: 1fr; border: 0;
     background: none; padding: 1rem .6rem; gap: var(--tabs-gap-wide);
+    padding-left: max(.6rem, env(safe-area-inset-left));
   }
   .tabs::after { display: none; }
   .tab { flex-direction: row; justify-content: flex-start; gap: .7rem; padding: 0 1rem; min-height: 3rem; border-radius: var(--tab-radius); font-size: .95rem; }
   .tab .badge { top: 50%; left: auto; right: .8rem; transform: translateY(-50%); }
-  main { padding-bottom: 2rem; margin: 0; width: 100%; }
+  main { padding-bottom: 2rem; margin: 0; width: 100%; padding-left: 1rem; }
 }
-/* маленькие экраны прибора (480×320, 800×480) */
+/* Низкий экран: телефон в альбомной ориентации, экраны прибора 800×480 и 480×320.
+   Подписи разделов НЕ прячутся (раньше пропадали): значок и слово стоят в одну строку — меню не выше прежнего. */
 @media (max-height: 520px) {
-  :root { --tabs-h: 50px; --tabs-pad: .2rem .45rem; --tabs-inner: .4rem; }
-  .tab span { display: none; }
+  :root { --tabs-h: 50px; --tabs-pad: .2rem .45rem; --tabs-side: .45rem; --tabs-inner: .4rem; }
+  .tab { flex-direction: row; gap: .4rem; font-size: .78rem; }
+  .tab svg { width: 1.25rem; height: 1.25rem; }
+  .tab .badge { top: .3rem; left: auto; right: .4rem; }
   .top { padding-top: .3rem; padding-bottom: .3rem; }
   main { padding-top: .6rem; }
   h1 { font-size: 1.15rem; }
@@ -178,6 +188,23 @@ main { padding: 1rem 1rem calc(var(--tabs-h) + 1.5rem + env(safe-area-inset-bott
 @media (max-height: 360px) {
   .opt .txt small, .say { display: none !important; }
   .ask { padding: .6rem; }
+}
+/* низкое меню внизу (не боковое): «Справочник» подписан «Каталог» — слово целиком и при вырезе экрана сбоку */
+@media (max-height: 520px) and (max-width: 899px) {
+  .tab .full { display: none; }
+  .tab .short { display: inline; }
+}
+/* узкий и низкий (экран прибора 480×320): значок над словом, мельче — шесть подписей влезают */
+@media (max-height: 520px) and (max-width: 600px) {
+  .tab { flex-direction: column; gap: 0; font-size: .62rem; }
+  .tab svg { width: 1.15rem; height: 1.15rem; }
+}
+/* боковое меню на низком экране (большой телефон в альбомной ориентации): подписи, кнопки ниже — все шесть видны */
+@media (min-width: 900px) and (max-height: 520px) {
+  .tabs { top: 2.9rem; padding-top: .6rem; padding-bottom: .6rem; gap: .45rem; }
+  .tab { font-size: .9rem; gap: .6rem; min-height: 2.6rem; }
+  .tab svg { width: 1.35rem; height: 1.35rem; }
+  .tab .badge { top: 50%; left: auto; right: .8rem; transform: translateY(-50%); }
 }
 
 /* ---------- карточки и кнопки ---------- */
@@ -374,6 +401,33 @@ textarea.editor[readonly] { opacity: .85; }
 .cat-tools { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; margin: .6rem 0 .2rem; }
 .seg.scroll { max-width: 100%; overflow-x: auto; }
 .seg.scroll button { white-space: nowrap; }
+/* ступени сложности: номер в кружке, название и одна строка «что на этой ступени» */
+.lv-head { display: flex; gap: .75rem; align-items: center; margin-bottom: .2rem; }
+.lv-head h2 { margin: 0; }
+.lv-head small { display: block; color: var(--muted); font-size: .86rem; margin-top: .1rem; }
+.lv-num {
+  flex: none; width: 2.3rem; height: 2.3rem; border-radius: 50%; display: grid; place-items: center;
+  background: var(--accent); color: var(--accent-ink); font: 700 1.15rem/1 var(--font-head); box-shadow: var(--sh-item);
+}
+.level > h3 { margin-top: 1rem; }
+.level { scroll-margin-top: 4.2rem; }
+.ladder { position: relative; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: .3rem 0 .5rem; }
+.ladder::before { content: ""; position: absolute; left: 10%; right: 10%; top: 1.15rem; height: 2px; background: var(--line); }
+.ladder button {
+  position: relative; border: 0; background: none; padding: 0 .1rem; min-height: 3.6rem; min-width: 0;
+  display: flex; flex-direction: column; align-items: center; gap: .2rem;
+}
+.ladder small { font-size: .78rem; color: var(--muted); max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ladder button:disabled { opacity: .35; cursor: default; }
+.ladder button:not(:disabled):active .lv-num { transform: var(--press); box-shadow: var(--sh-press); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.map-level { display: flex; gap: .6rem; align-items: center; margin: 1.1rem 0 .1rem; }
+.map-level:first-of-type { margin-top: .3rem; }
+.map-level .lv-num { width: 1.8rem; height: 1.8rem; font-size: .95rem; }
+.map-level b { font-family: var(--font-head); }
+/* фильтры справочника на телефоне — все четыре видны без прокрутки */
+@media (max-width: 480px) { .cat-tools .seg button { padding: .5rem .55rem; font-size: .9rem; } }
+@media (max-width: 380px) { .cat-tools .seg button { padding: .45rem .42rem; font-size: .8rem; } .ladder small { font-size: .7rem; } }
 .tiles { display: grid; gap: var(--list-gap); grid-template-columns: repeat(auto-fill, minmax(15.5rem, 1fr)); }
 .tile {
   display: flex; gap: .75rem; align-items: flex-start; text-align: left; width: 100%; background: var(--surface2);
@@ -1963,6 +2017,7 @@ function drawing(d) {
 
 function cardChips(c) {
   const chips = [h("span", { class: "chip" }, c.kind_title), h("span", { class: "chip" }, c.group_title)];
+  if (c.level) chips.push(h("span", { class: "chip info" }, "ступень " + c.level + " · " + c.level_title));
   if (c.license) chips.push(h("span", { class: "chip" }, c.license.length > 28 ? c.license.split(/[ (]/)[0] : c.license));
   if (c.voltage) chips.push(h("span", { class: "chip" }, c.voltage.split(" (")[0]));
   if (c.usb) chips.push(h("span", { class: "chip mono" }, "USB " + c.usb));
@@ -2044,13 +2099,14 @@ async function renderCatalog(v) {
   const input = h("input", { class: "in", type: "search", placeholder: "Поиск: CH341A, SWD, 1,8 В, автор…", value: S.catQ || "" });
   const seg = h("div", { class: "seg scroll", role: "group", "aria-label": "Что показать" });
   const list = h("div", {}, h("p", { class: "muted" }, "Загружаю…"));
+  const ladder = h("nav", { class: "ladder", "aria-label": "Ступени — от простого к сложному" });
   v.append(h("section", { class: "card" },
     h("div", { class: "row", style: "justify-content:space-between" }, h("h1", {}, "Справочник"),
       h("div", { class: "row" },
         h("button", { class: "btn small", type: "button", onclick: () => openPage(renderCatalogMap) }, "Как всё связано"),
         h("button", { class: "btn small primary", type: "button", onclick: () => openPage(v2 => renderCardBuilder(v2, "adapter")) }, "+ Карточка"))),
-    h("p", { class: "say" }, "Переходники — что купить или собрать, чтобы подключиться к микросхеме. Движки — программы с открытым кодом, которые Дирижёр вызывает, и их авторы."),
-    h("div", { class: "cat-tools" }, seg), input), list);
+    h("p", { class: "say" }, "Идите по ступеням сверху вниз — от первой флешки до капота. Переходники — что купить или собрать; движки — программы с открытым кодом, которые вызывает Дирижёр."),
+    ladder, h("div", { class: "cat-tools" }, seg), input), list);
   const draw = () => {
     seg.textContent = "";
     for (const [k, t] of kinds) seg.append(h("button", { type: "button", "aria-pressed": S.catKind === k ? "true" : "false",
@@ -2068,13 +2124,31 @@ async function renderCatalog(v) {
     };
     const shown = r.items.filter(match);
     list.textContent = "";
+    /* Ступени сложности сверху вниз; внутри ступени — прежние разделы: купить, собрать, движки, основа. */
     const groups = [["Купить и подключить", c => c.kind === "adapter" && c.group === "buy"],
-      ["Собрать или доработать самому", c => c.kind === "adapter" && c.group !== "buy"],
-      ["Движки: программы, которые вызывает Дирижёр", c => c.kind === "engine" && c.group !== "base"],
+      ["Собрать или доработать", c => c.kind === "adapter" && c.group !== "buy"],
+      ["Движки", c => c.kind === "engine" && c.group !== "base"],
       ["Основа Дирижёра", c => c.kind === "engine" && c.group === "base"]];
-    for (const [title, test] of groups) {
-      const items = shown.filter(test);
-      if (items.length) list.append(h("section", { class: "card" }, h("h2", {}, title), h("div", { class: "tiles" }, items.map(cardTile))));
+    const levels = r.levels && r.levels.length ? r.levels : [{ n: 0, title: "", about: "" }];
+    /* лестница ступеней: касание — к ступени; пустая при поиске или фильтре — бледная */
+    ladder.textContent = "";
+    for (const lv of r.levels || []) {
+      const count = shown.filter(c => c.level === lv.n).length;
+      ladder.append(h("button", { type: "button", disabled: !count, title: lv.title, "aria-label": "Ступень " + lv.n + ": " + lv.title,
+        onclick: () => { const el = document.getElementById("level-" + lv.n); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); } },
+        h("span", { class: "lv-num" }, lv.n), h("small", {}, lv.short || lv.title)));
+    }
+    for (const lv of levels) {
+      const inLevel = shown.filter(c => lv.n === 0 || c.level === lv.n);
+      if (!inLevel.length) continue;
+      const box = h("section", { class: "card level", id: "level-" + lv.n },
+        lv.n ? h("div", { class: "lv-head" }, h("span", { class: "lv-num", "aria-hidden": "true" }, lv.n),
+          h("div", {}, h("h2", {}, h("span", { class: "sr" }, "Ступень " + lv.n + ". "), lv.title), h("small", {}, lv.about))) : null);
+      for (const [title, test] of groups) {
+        const items = inLevel.filter(test);
+        if (items.length) box.append(h("h3", {}, title), h("div", { class: "tiles" }, items.map(cardTile)));
+      }
+      list.append(box);
     }
     if (!shown.length) list.append(h("div", { class: "card empty" }, "Ничего не нашлось. ", h("button", { class: "btn small", type: "button",
       onclick: () => { input.value = ""; S.catKind = ""; draw(); } }, "Показать всё")));
@@ -2133,9 +2207,19 @@ async function renderCatalogMap(v) {
   try { r = await catalogData(); } catch (e) { rows.lastChild.textContent = e.message; return; }
   if (!alive()) return;
   rows.lastChild.remove();
+  rows.append(h("p", { class: "muted" }, "Сверху вниз — от простого к сложному, по ступеням, как в справочнике."));
   const byTarget = {};
   for (const o of r.overview) (byTarget[o.target] = byTarget[o.target] || []).push(o);
+  const levelTitle = {};
+  for (const lv of r.levels || []) levelTitle[lv.n] = lv.title;
+  let shownLevel = null;
   for (const [t, list] of Object.entries(byTarget)) {
+    const lv = list[0].level;
+    if (lv && lv !== shownLevel && levelTitle[lv]) {
+      shownLevel = lv;
+      rows.append(h("div", { class: "map-level" }, h("span", { class: "lv-num", "aria-hidden": "true" }, lv),
+        h("b", {}, h("span", { class: "sr" }, "Ступень " + lv + ". "), levelTitle[lv])));
+    }
     const row = h("div", { class: "map-row" }, h("div", { class: "tt" }, r.targets[t] || t));
     for (const o of list) {
       const steps = [{ title: "Дирижёр", core: true }];
@@ -2160,7 +2244,7 @@ function slugId(title) {
   return t;
 }
 function cbDefaults(kind) {
-  return { kind, id: "", title: "", tagline: "", group: kind === "engine" ? "tool" : "buy", icon: kind === "engine" ? "code" : "usb",
+  return { kind, id: "", title: "", tagline: "", group: kind === "engine" ? "tool" : "buy", level: "", icon: kind === "engine" ? "code" : "usb",
     what: "", voltage: "", usb: "", engines: [], needs: [], adapters: [], a_title: "Переходник", b_title: "Микросхема",
     wires: [{ a: "GND", b: "GND", color: "black", note: "первым" }], steps: "", check: "", caution: "", verify: "",
     authors: "", license: "", link: "", strengths: "", how: "", in_dirizher: "", plugin: "", program: "", install: "", examples: "" };
@@ -2227,6 +2311,7 @@ async function renderCardBuilder(v, kind) {
     field("tagline", "Для чего — одной строкой", null, { ph: "Подключить ST-Link к плате с разъёмом 10 выводов" }),
     field("id", "Имя файла", "подставляется из названия; латиница, цифры и _", { ph: F.kind === "engine" ? "pyocd" : "swd_10to4", raw: true }),
     select("group", "Раздел", Object.entries(cat.groups[F.kind])),
+    select("level", "Ступень сложности", [["", "Авто — по видам микросхем"]].concat((cat.levels || []).map(l => [String(l.n), l.n + " · " + l.title]))),
     select("icon", "Значок", cat.icons.map(i => [i, i])),
     field("what", "Что это", "1–2 простых предложения", { area: true }));
   if (F.kind === "adapter") {

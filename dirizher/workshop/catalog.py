@@ -35,17 +35,35 @@ GROUPS = {
     "engine": {"tool": "Инструмент", "base": "Основа"},
     "adapter": {"buy": "Купить", "diy": "Собрать", "mod": "Купить и доработать"},
 }
+# Виды микросхем — по порядку от простого к сложному (так их показывает «Как всё связано»).
 TARGETS = {
     "memory.spi_nor": "SPI-флешка 25xx",
     "memory.i2c_eeprom": "EEPROM 24Cxx",
     "memory.parallel": "Память в панельке",
-    "mcu.arm": "Микроконтроллер ARM",
     "mcu.avr": "Микроконтроллер AVR",
     "mcu.esp": "ESP8266 / ESP32",
+    "mcu.arm": "Микроконтроллер ARM",
     "device.modbus": "Прибор Modbus RTU",
-    "dump": "Любой дамп",
     "signals": "Сигналы на плате",
+    "dump": "Любой дамп",
 }
+# Ступени сложности: справочник ведёт от первой флешки к настройкам приборов и капоту.
+# У карточки — поле level; без него ступень берётся по самому простому виду микросхем (TARGET_LEVELS).
+LEVELS = {
+    1: {"title": "Первая флешка", "short": "Флешка",
+        "about": "SPI-флешка 25xx на 3,3 В: CH341A, прищепка или панелька — без пайки"},
+    2: {"title": "Другие напряжения и шины", "short": "Шины",
+        "about": "флешки на 1,8 В, EEPROM 24Cxx по I2C, память в панельке, SPI самого Pi"},
+    3: {"title": "Микроконтроллеры", "short": "МК",
+        "about": "AVR, ESP и ARM: свой программатор у каждого, сброс и защита чтения"},
+    4: {"title": "Приборы и замеры", "short": "Приборы",
+        "about": "настройки приборов по RS-485, сигналы на проводах, что внутри дампа"},
+    5: {"title": "Под капотом", "short": "Капот",
+        "about": "на чём построен Дирижёр — для тех, кто правит профили, навыки и код"},
+}
+TARGET_LEVELS = {"memory.spi_nor": 1, "memory.i2c_eeprom": 2, "memory.parallel": 2, "mcu.avr": 3, "mcu.esp": 3,
+                 "mcu.arm": 3, "device.modbus": 4, "signals": 4, "dump": 4}
+DEFAULT_LEVEL = 3
 COLORS = {
     "red": "красный", "black": "чёрный", "orange": "оранжевый", "yellow": "жёлтый", "green": "зелёный",
     "blue": "синий", "violet": "фиолетовый", "white": "белый", "gray": "серый", "brown": "коричневый",
@@ -198,6 +216,9 @@ def validate(data, where: str = "карточка") -> list:
         errors.append(f"group — одно из {', '.join(GROUPS[kind])}")
     if data.get("icon") is not None and data["icon"] not in ICONS:
         errors.append(f"icon — одно из {', '.join(ICONS)}")
+    level = data.get("level")
+    if level is not None and (isinstance(level, bool) or level not in LEVELS):
+        errors.append(f"level — ступень сложности, число от 1 до {len(LEVELS)}")
     for key in LIST_FIELDS:
         value = data.get(key)
         if value is not None and not isinstance(value, (list, str)):
@@ -238,6 +259,21 @@ def validate(data, where: str = "карточка") -> list:
     return errors
 
 
+def level_of(data: dict) -> int:
+    """Ступень сложности: из поля level, иначе — по самому простому виду микросхем; основа — «под капотом»."""
+    if data.get("level") in LEVELS and not isinstance(data.get("level"), bool):
+        return int(data["level"])
+    if data.get("group") == "base":
+        return max(LEVELS)
+    found = [TARGET_LEVELS[str(t)] for t in _as_list(data.get("targets")) if str(t) in TARGET_LEVELS]
+    return min(found) if found else DEFAULT_LEVEL
+
+
+def levels_public() -> list:
+    """Ступени для интерфейсов — по порядку."""
+    return [dict(n=n, **lv) for n, lv in sorted(LEVELS.items())]
+
+
 def normalize(data: dict, path: Path | None = None, source: str = "", rel: str = "") -> dict:
     """Карточка в едином виде для интерфейсов: списки — списки, шаги — словари."""
     kind = data["kind"]
@@ -249,6 +285,8 @@ def normalize(data: dict, path: Path | None = None, source: str = "", rel: str =
         "path": rel, "source": source,
     }
     card["group_title"] = GROUPS[kind][card["group"]]
+    card["level"] = level_of(data)
+    card["level_title"] = LEVELS[card["level"]]["title"]
     for key in TEXT_FIELDS:
         if key in ("tagline",):
             continue
@@ -348,9 +386,19 @@ def load(cfg) -> tuple:
     warns = link_warnings(cards)
     for c in cards:
         c["warnings"] = warns.get(c["id"], [])
-    order = {"engine": 0, "adapter": 1}
-    cards.sort(key=lambda c: (order[c["kind"]], 0 if c["group"] in ("tool", "buy") else 1, c["title"].lower()))
+    cards.sort(key=sort_key)
     return cards, errors
+
+
+GROUP_ORDER = {"buy": 0, "mod": 1, "diy": 2, "tool": 3, "base": 4}
+TARGET_RANK = {t: i for i, t in enumerate(TARGETS)}
+
+
+def sort_key(c: dict) -> tuple:
+    """От простого к сложному: ступень → купить, доработать, собрать, программы, основа →
+    первый вид микросхем карточки (в порядке TARGETS) → название."""
+    first = TARGET_RANK.get(c["targets"][0], 99) if c.get("targets") else 99
+    return c["level"], GROUP_ORDER.get(c["group"], 9), first, c["title"].lower()
 
 
 def with_status(cards: list, plugin_report: list | None = None, sim: bool = False) -> list:
@@ -422,21 +470,24 @@ def related(cards: list, card: dict) -> dict:
 
 
 def overview(cards: list) -> list:
-    """«Как всё связано»: для каждого вида целей — переходники → движок → лезвие → ядро Дирижёра."""
+    """«Как всё связано»: для каждого вида целей — переходники → движок → лезвие → ядро Дирижёра.
+    Виды — по ступеням (как в TARGETS), переходники в строке — тоже от простого к сложному."""
+    ids = {c["id"]: c for c in cards}
     rows = []
     for target, title in TARGETS.items():
-        engines = [c for c in cards if c["kind"] == "engine" and target in c["targets"]]
+        engines = sorted((c for c in cards if c["kind"] == "engine" and target in c["targets"]), key=sort_key)
         for e in engines:
-            adapters = related(cards, e)["items"]
-            rows.append({"target": target, "target_title": title, "engine": e["id"], "engine_title": e["title"],
-                         "plugin": e["plugin"], "adapters": [{"id": a["id"], "title": a["title"]} for a in adapters]})
+            adapters = sorted(related(cards, e)["items"], key=lambda a: sort_key(ids[a["id"]]))
+            rows.append({"target": target, "target_title": title, "level": TARGET_LEVELS.get(target, DEFAULT_LEVEL),
+                         "engine": e["id"], "engine_title": e["title"], "plugin": e["plugin"],
+                         "adapters": [{"id": a["id"], "title": a["title"]} for a in adapters]})
     return rows
 
 
 # ======================= текст для терминала =======================
 def text(card: dict, cards: list | None = None) -> list:
     """Карточка строками — для мастера в терминале и команды catalog."""
-    out = [card["tagline"], ""]
+    out = [card["tagline"], f"ступень {card['level']} из {len(LEVELS)} · {card['level_title']}", ""]
 
     def block(title, lines):
         if lines:
@@ -512,6 +563,8 @@ def from_fields(f: dict) -> dict:
     group = f.get("group")
     if group:
         d["group"] = group
+    if str(f.get("level") or "").isdigit():
+        d["level"] = int(f["level"])     # пусто — «авто»: ступень по видам микросхем
     if f.get("icon"):
         d["icon"] = f["icon"]
     if kind == "engine":

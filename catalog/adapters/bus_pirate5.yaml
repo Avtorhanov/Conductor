@@ -3,6 +3,7 @@ kind: adapter
 title: Bus Pirate 5
 tagline: EEPROM 24Cxx по I2C — сам питает чип, включает подтяжки и подписывает выводы на экране
 group: buy
+level: 2
 icon: board
 voltage: "1,2–5,5 В (регулируемое питание и буферы выводов)"
 engines: [buspirate]

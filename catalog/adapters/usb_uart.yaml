@@ -3,6 +3,7 @@ kind: adapter
 title: USB-UART (CP2102, CH340, FT232)
 tagline: Связь с ESP8266/ESP32 по последовательному порту — для esptool
 group: buy
+level: 3
 icon: cable
 voltage: "3,3 В логика (только!)"
 engines: [esptool]

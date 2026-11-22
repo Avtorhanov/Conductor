@@ -3,6 +3,7 @@ kind: engine
 title: PyYAML
 tagline: Читает YAML — профили, навыки, Штурман, карточки этого справочника
 group: base
+level: 5
 icon: code
 lang: Python, C
 license: MIT

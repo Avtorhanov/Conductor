@@ -3,6 +3,7 @@ kind: adapter
 title: Прищепка SOIC-8 с кабелем
 tagline: Подключиться к флешке или EEPROM прямо на плате, без пайки
 group: buy
+level: 1
 icon: clip
 engines: [flashrom, buspirate, minipro]
 needs: []

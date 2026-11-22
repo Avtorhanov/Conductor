@@ -3,6 +3,7 @@ kind: engine
 title: AVRDUDE
 tagline: Читает и пишет AVR-микроконтроллеры — ATmega, ATtiny, Arduino — flash и EEPROM
 group: tool
+level: 3
 icon: chip
 lang: C
 license: GPL-2.0

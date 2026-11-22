@@ -269,9 +269,14 @@ def cmd_catalog(cfg, card_id, kind) -> int:
         for line in catalog.text(card, cards):
             ui.out(line)
         return 0
-    ui.header("Справочник: движки и переходники")
+    ui.header("Справочник: движки и переходники — от простого к сложному")
+    level = None
     for c in catalog.search(cards, "", kind or ""):
-        ui.out(f" • {c['id']:<15} {c['title']} · {c['group_title'].lower()} — {c['tagline']}")
+        if c["level"] != level:
+            level = c["level"]
+            lv = catalog.LEVELS[level]
+            ui.out(f"\n {level}. {lv['title']} — {lv['about']}")
+        ui.out(f"   • {c['id']:<15} {c['title']} · {c['group_title'].lower()} — {c['tagline']}")
     for path, err in errors:
         ui.warn(f"{path}: {err}")
     ui.info("карточка целиком: python3 -m dirizher catalog <id>; с рисунками — в браузере, раздел «Справочник»")

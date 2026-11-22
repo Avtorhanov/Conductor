@@ -3,6 +3,7 @@ kind: engine
 title: Прошивка Bus Pirate 5
 tagline: Универсальный «переводчик» шин — I2C, SPI, UART — с терминалом и экраном
 group: tool
+level: 2
 icon: board
 since: "2024"
 lang: C (RP2040)

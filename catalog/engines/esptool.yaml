@@ -3,6 +3,7 @@ kind: engine
 title: esptool
 tagline: Полный дамп и запись флеша модулей ESP8266 и ESP32 по USB-UART
 group: tool
+level: 3
 icon: wave
 since: "2014"
 lang: Python

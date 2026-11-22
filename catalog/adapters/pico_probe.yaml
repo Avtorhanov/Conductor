@@ -3,6 +3,7 @@ kind: adapter
 title: Raspberry Pi Pico как отладчик (собрать)
 tagline: Отладчик SWD из Pico за 10 минут — прошивка debugprobe и три провода
 group: diy
+level: 3
 icon: probe
 voltage: "3,3 В"
 usb: "2e8a:000c"

@@ -3,6 +3,7 @@ kind: adapter
 title: ST-Link V2 (клон)
 tagline: Отладчик SWD для STM32 и других ARM — 4 провода
 group: buy
+level: 3
 icon: probe
 voltage: "3,3 В"
 usb: "0483:3748"

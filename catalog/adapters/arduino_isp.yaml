@@ -3,6 +3,7 @@ kind: adapter
 title: Arduino как программатор AVR (собрать)
 tagline: Нет USBasp? Arduino Uno со скетчем ArduinoISP прошьёт и прочитает другой AVR
 group: diy
+level: 3
 icon: board
 voltage: "5 В"
 engines: [avrdude]

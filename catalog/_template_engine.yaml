@@ -7,6 +7,8 @@ kind: engine
 title: "Название программы"
 tagline: "Одна строка: что делает и с чем"
 group: tool                   # tool — инструмент; base — основа, на которой стоит Дирижёр
+# level: 2                    # ступень сложности 1–5: 1 первая флешка, 2 другие напряжения и шины,
+                              # 3 микроконтроллеры, 4 приборы и замеры, 5 под капотом (пусто — по targets)
 icon: code                    # chip usb clip board probe cable socket scope code db wave plug
 since: "2010"                 # с какого года проект (если известно)
 lang: C                       # на чём написан

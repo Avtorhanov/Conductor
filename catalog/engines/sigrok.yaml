@@ -3,6 +3,7 @@ kind: engine
 title: sigrok (sigrok-cli)
 tagline: Логический анализатор — смотрит, что происходит на проводах, ничего не посылая
 group: tool
+level: 4
 icon: scope
 since: "2010"
 lang: C, Python (декодеры)
