@@ -244,7 +244,7 @@ class Recorder:
         """Журнал для демо: эталон с исправной → поломка → ремонт → параметры."""
         shutil.rmtree(self.data, ignore_errors=True)
         plan = [("sim", {"do": "reset"}, []), ("run", {}, ["ok", "yes"]), ("sim", {"do": "corrupt"}, []),
-                ("run", {"dry_run": True}, ["ok"]), ("run", {}, ["ok", "ok", "yes"]), ("params", {}, [])]
+                ("run", {"dry_run": True}, ["ok", "0"]), ("run", {}, ["ok", "0", "ok", "yes"]), ("params", {}, [])]
         for action, params, answers in plan:
             self.run_once(action, params, answers)
         hist = self.req("GET", "/api/history?n=100&sim=1")

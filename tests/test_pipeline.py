@@ -61,7 +61,7 @@ class SimulatorScenarios(unittest.TestCase):
 
     def test_repair_corrupted_preserves_unique_data(self):
         self.make_reference()
-        c = self.conductor(["yes"])                           # «заработало?» — да
+        c = self.conductor([0, "yes"])                        # способ — первый (весь эталон); «заработало?» — да
         self.sim(c).do_corrupt()
         broken = self.flash(c)
         sid = c.run()
@@ -75,7 +75,7 @@ class SimulatorScenarios(unittest.TestCase):
 
     def test_unique_area_kept_from_current_chip(self):
         self.make_reference()
-        c = self.conductor(["yes"])
+        c = self.conductor([0, "yes"])                        # способ — первый (весь эталон)
         sim = self.sim(c)
         sim.do_corrupt()
         buf = bytearray(self.flash(c))
@@ -129,7 +129,7 @@ class SimulatorScenarios(unittest.TestCase):
 
     def test_rollback_restores_before_and_is_itself_reversible(self):
         self.make_reference()
-        c = self.conductor(["yes"])
+        c = self.conductor([0, "yes"])
         self.sim(c).do_corrupt()
         broken = self.flash(c)
         repair_sid = c.run()
@@ -144,7 +144,7 @@ class SimulatorScenarios(unittest.TestCase):
 
     def test_failed_feedback_lowers_recipe(self):
         self.make_reference()
-        c = self.conductor(["no"])                            # «заработало?» — нет
+        c = self.conductor([0, "no"])                         # способ — первый; «заработало?» — нет
         self.sim(c).do_corrupt()
         sid = c.run()
         self.assertEqual(self.outcome(c, sid), "not_repaired")

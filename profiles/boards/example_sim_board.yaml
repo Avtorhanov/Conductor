@@ -20,6 +20,36 @@ preserve:                       # уникальное для каждой пл�
     length: 0x1000
     why: MAC-адрес и серийный номер платы
 
+# Карта разделов (core/layout.py): из чего состоит образ. Сравнение с эталоном называет разделы,
+# рецепт restore_regions берёт из эталона только испорченные разделы с restore: true.
+layout:
+  - id: header
+    title: Заголовок прошивки
+    offset: 0x0
+    length: 0x1000
+    kind: boot
+    help: Подпись FWIM, версия формата, длина и CRC прошивки. Пустой — плата не запустится.
+  - id: firmware
+    title: Прошивка
+    offset: 0x1000
+    length: 0x300000
+    kind: data
+  - id: free
+    title: Свободное место
+    offset: 0x301000
+    end: 0x7FE000
+    kind: free
+  - id: settings
+    title: Параметры
+    offset: 0x7FE000
+    length: 0x1000
+    kind: config                # restore: false по умолчанию — настройки этой платы, а не эталона
+  - id: unique
+    title: MAC и серийник
+    offset: 0x7FF000
+    length: 0x1000
+    kind: unique                # preserve: true по умолчанию
+
 # Карта параметров (учебная): что можно прочитать и изменить сценарием «Настройка».
 params:
   - id: fw_format
@@ -48,11 +78,15 @@ checks:
   - size_matches
   - compare_reference
   - binwalk
+  - layout
 
 recipes:
   - id: restore_reference
     title: Записать эталонную прошивку (MAC и серийник сохраняются)
     action: write_reference
+  - id: restore_regions
+    title: Восстановить из эталона только испорченные разделы (параметры, MAC и серийник — свои)
+    action: write_reference_regions
   - id: restore_image
     title: Записать официальный образ (--image)
     action: write_image

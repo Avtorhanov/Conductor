@@ -12,6 +12,7 @@ Conductor, со всеми копиями, сверками и подтверж�
 """
 from __future__ import annotations
 
+import json
 import re
 from contextlib import contextmanager
 from pathlib import Path
@@ -390,7 +391,14 @@ def session_detail(c, sid: int) -> dict | None:
     snaps = [{"kind": sn["kind"], "kind_ru": SNAP_RU.get(sn["kind"], sn["kind"]), "sha": sn["sha"],
               "size": sn["size"], "verified": bool(sn["verified"]), "ts": _fmt_time(sn["ts"])}
              for sn in c.memory.snapshots(sid)]
-    events = [{"ts": e["ts"][11:19], "level": e["level"], "message": e["message"]} for e in c.memory.events(sid)]
+    rows = c.memory.events(sid)
+    events = [{"ts": e["ts"][11:19], "level": e["level"], "message": e["message"]} for e in rows]
+    regions = []                                  # разделы с отличиями от эталона (карта разделов профиля)
+    for e in rows:
+        try:
+            regions = (json.loads(e["data"]) if e["data"] else {}).get("regions") or regions
+        except (TypeError, ValueError, AttributeError):
+            pass
     actions = []
     kinds = {sn["kind"] for sn in snaps}
     if s["recipe_id"] and s["profile_id"]:
@@ -405,7 +413,7 @@ def session_detail(c, sid: int) -> dict | None:
     if s["profile_id"] and any(sn["verified"] for sn in snaps if sn["kind"] != "written"):
         actions.append({"label": "Сделать эталоном", "action": "reference",
                         "params": {"session": sid, "label": "ask"}})
-    return {"session": info, "snapshots": snaps, "events": events, "actions": actions}
+    return {"session": info, "snapshots": snaps, "events": events, "actions": actions, "regions": regions}
 
 
 def params_view(c, sid: int | None = None) -> dict | None:

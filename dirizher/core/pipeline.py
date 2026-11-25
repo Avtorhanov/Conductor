@@ -14,7 +14,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .checks import CHECKS, DEFAULT_CHECKS, CheckInput, diff_sectors, is_fill
+from .checks import CHECKS, DEFAULT_CHECKS, CheckInput, diff_sectors, is_fill, masked, region_diff
+from . import layout as layout_mod
 from .learning import Learning
 from .memory import Memory, now
 from .models import Finding, Inspection, chip_key
@@ -390,7 +391,10 @@ class Conductor:
 
     def diagnose(self, det, data: bytes, verified: bool, ref) -> list:
         findings = []
-        for spec in det.profile.check_specs(DEFAULT_CHECKS):
+        specs = det.profile.check_specs(DEFAULT_CHECKS)
+        if det.profile.layout and not any(sp.get("type") == "layout" for sp in specs):
+            specs.append({"type": "layout"})        # есть карта разделов — проверка по ней всегда
+        for spec in specs:
             name = str(spec.get("type"))
             fn = CHECKS.get(name)
             if fn is None:
@@ -403,6 +407,12 @@ class Conductor:
             findings.append(f)
             self.ui.finding(f)
             self.log(f"[{f.status}] {f.check}: {f.message}")
+        if det.profile.layout and ref is not None:
+            rows = region_diff(CheckInput(data, verified, det.profile, ref, {}, self))
+            if rows:                                # для подробностей сеанса (веб, мастер)
+                self.log("разделы с отличиями от эталона: " + layout_mod.describe(rows),
+                         data={"regions": [{k: r[k] for k in ("id", "title", "kind", "sectors", "restore")}
+                                           for r in rows]})
         return findings
 
     def plan(self, det, findings: list, ref, image_path) -> tuple:
@@ -418,7 +428,7 @@ class Conductor:
             r = det.profile.recipe(rid)
             if r is None:
                 continue
-            if r["action"] == "write_reference" and ref is None:
+            if r["action"] in ("write_reference", "write_reference_regions") and ref is None:
                 hints.append("восстановить из эталона нельзя — эталона для этого устройства ещё нет")
                 continue
             if r["action"] == "write_image" and not image_path:
@@ -434,6 +444,8 @@ class Conductor:
             if ref is None:
                 raise ValueError("эталона нет")
             image, source, preserve = bytearray(ref["data"]), f"эталон «{ref['label']}»", ref["preserve"]
+        elif action == "write_reference_regions":
+            return self._build_regions(det, current, ref)
         elif action == "write_image":
             path = Path(image_path).expanduser()
             if not path.is_file():
@@ -455,6 +467,35 @@ class Conductor:
             else:
                 image[off:off + ln] = cur
                 notes.append(f"сохраняю с текущего чипа: {why} (0x{off:X}+0x{ln:X})")
+        return bytes(image), source, notes, warnings
+
+    def _build_regions(self, det, current: bytes, ref) -> tuple:
+        """Частичное восстановление: текущий чип, а отличающиеся разделы restore: true — из эталона.
+        Уникальное (preserve), настройки и место вне карты остаются с чипа."""
+        if ref is None:
+            raise ValueError("эталона нет")
+        if not det.profile.layout:
+            raise ValueError("в профиле нет карты разделов layout")
+        preserve = ref["preserve"]
+        # отличия считаются без уникальных областей: они остаются с чипа в любом случае
+        _, taken, left = layout_mod.build(masked(current, preserve), masked(ref["data"], preserve),
+                                          det.profile.layout)
+        image = bytearray(current)
+        for row in taken:
+            image[row["offset"]:row["end"]] = ref["data"][row["offset"]:row["end"]]
+        for reg in preserve:                        # старое поле preserve внутри раздела — тоже с чипа
+            off, ln = to_int(reg["offset"]), to_int(reg["length"])
+            image[off:off + ln] = current[off:off + ln]
+        notes = [f"беру из эталона: «{r['title']}» ({layout_mod.span(r)}), отличалось "
+                 f"{layout_mod.sectors_text(r['sectors'])}" for r in taken]
+        warnings = [(f"не трогаю «{r['title']}» (отличается {layout_mod.sectors_text(r['sectors'])}): "
+                     "раздел не берётся из эталона (restore: false)") if r["id"] else
+                    (f"не трогаю место вне карты разделов (отличается {layout_mod.sectors_text(r['sectors'])}): "
+                     "оно не описано в профиле") for r in left]
+        if not taken:
+            notes.append("отличий в восстанавливаемых разделах нет")
+        source = (f"разделы из эталона «{ref['label']}»: " + ", ".join(f"«{r['title']}»" for r in taken)
+                  if taken else f"эталон «{ref['label']}» (разделы не отличаются)")
         return bytes(image), source, notes, warnings
 
     def apply(self, plugin, det, image: bytes, source: str) -> bool:

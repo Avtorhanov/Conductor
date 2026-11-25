@@ -1172,6 +1172,11 @@ async function renderSession(v, sid) {
       h("a", { class: "btn small", href: "/api/download?sid=" + sid + "&kind=" + sn.kind + "&sim=" + (S.sim ? 1 : 0), download: "" }, "Скачать")));
     v.append(snaps);
   }
+  if (d.regions && d.regions.length) {
+    v.append(h("section", { class: "card" }, h("h3", {}, "Разделы с отличиями от эталона"),
+      h("dl", { class: "kv" }, d.regions.map(r => [h("dt", {}, r.title),
+        h("dd", {}, "секторов: " + r.sectors + (r.restore ? "" : " · из эталона не берётся"))]))));
+  }
   if (d.actions.some(a => a.action === "tune_form")) {
     const pc = h("section", { class: "card params" }, h("h3", {}, "Параметры"));
     v.append(pc);

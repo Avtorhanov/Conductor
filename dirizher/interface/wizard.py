@@ -351,6 +351,11 @@ class Wizard:
         for sn in d["snapshots"]:
             ui.info(f"{sn['kind_ru']}: {sn['sha'][:16]}… {sn['size']} байт, "
                     f"подтверждён: {'да' if sn['verified'] else 'нет'}")
+        if d.get("regions"):
+            ui.info("разделы с отличиями от эталона:")
+            for r in d["regions"]:
+                ui.info(f"  • «{r['title']}» — секторов: {r['sectors']}"
+                        + ("" if r["restore"] else " (из эталона не берётся)"))
         for e in d["events"][-40:]:
             ui.out(f"   {e['ts']} [{e['level']}] {e['message']}")
         actions = d["actions"] + ([{"label": "Сохранить снимок в файл", "action": "export",
