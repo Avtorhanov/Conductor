@@ -351,6 +351,10 @@ class Wizard:
         for sn in d["snapshots"]:
             ui.info(f"{sn['kind_ru']}: {sn['sha'][:16]}… {sn['size']} байт, "
                     f"подтверждён: {'да' if sn['verified'] else 'нет'}")
+        if d.get("auto_layout"):
+            ui.info(f"разделы по содержимому ({d['auto_layout']['title']}):")
+            for r in d["auto_layout"]["regions"]:
+                ui.info(f"  • «{r['title']}» {r['span']}" + (" — сохраняется с чипа" if r["preserve"] else ""))
         if d.get("regions"):
             ui.info("разделы с отличиями от эталона:")
             for r in d["regions"]:

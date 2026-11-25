@@ -8,12 +8,12 @@
         title: Загрузчик
         offset: 0x0
         length: 0x40000              # или end: 0x40000 (не включая)
-        kind: boot                   # boot kernel rootfs config calibration unique data free
+        kind: boot                   # boot app kernel rootfs config calibration unique data free
         preserve: false              # уникальное для платы: при ремонте берётся с текущего чипа
         restore: true                # можно брать из эталона (рецепт restore_regions)
         help: Что это и чем грозит порча
 
-По умолчанию: `preserve` — только у kind: unique; `restore` — у boot, kernel, rootfs, data, free
+По умолчанию: `preserve` — только у kind: unique; `restore` — у boot, app, kernel, rootfs, data, free
 (и никогда — у preserve). Настройки, калибровки и уникальное из эталона не берутся, пока профиль
 явно не скажет `restore: true`.
 
@@ -30,10 +30,11 @@ import re
 
 SECTOR = 4096
 KINDS = {
-    "boot": "загрузчик", "kernel": "ядро", "rootfs": "файловая система", "config": "настройки",
+    "boot": "загрузчик", "app": "приложение (прошивка)", "kernel": "ядро", "rootfs": "файловая система",
+    "config": "настройки",
     "calibration": "калибровки", "unique": "уникальное (MAC, серийник)", "data": "данные", "free": "свободно",
 }
-RESTORE_BY_DEFAULT = {"boot", "kernel", "rootfs", "data", "free"}
+RESTORE_BY_DEFAULT = {"boot", "app", "kernel", "rootfs", "data", "free"}
 ID_RE = re.compile(r"^[a-z][a-z0-9_]{0,39}$")
 FIELDS = {"id", "title", "offset", "length", "end", "kind", "preserve", "restore", "help"}
 

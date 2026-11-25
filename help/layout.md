@@ -30,7 +30,7 @@ layout:
     title: Загрузчик
     offset: 0x0
     length: 0x40000       # или end: 0x40000 (не включая)
-    kind: boot            # boot kernel rootfs config calibration unique data free
+    kind: boot            # boot app kernel rootfs config calibration unique data free
   - id: settings
     title: Настройки
     offset: 0x7FE000
@@ -47,10 +47,26 @@ recipes:
     action: write_reference_regions
 ```
 
-По умолчанию `restore: true` — у `boot`, `kernel`, `rootfs`, `data`, `free`; у `config`, `calibration`, `unique` — нет.
+По умолчанию `restore: true` — у `boot`, `app`, `kernel`, `rootfs`, `data`, `free`; у `config`, `calibration`, `unique` — нет.
 `preserve` и `restore` вместе нельзя. Разделы не должны пересекаться и выходить за `size`; покрывать весь чип
 не обязательно.
 
 Границы разделов берите из таблицы разделов прошивки (вывод загрузчика, binwalk, документация платы) и
 проверяйте на исправном дампе. Пример — учебная плата `example_sim_board`: `python3 -m dirizher sim corrupt`,
 затем `python3 -m dirizher --sim run`.
+
+## Разделы сами: по содержимому дампа
+
+Если карты в профиле нет, Дирижёр может найти её в самом дампе — профиль включает это полем
+`layout_auto: [esp_partitions, intel_ifd]` (или `layout_auto: all`):
+
+- **таблица разделов ESP32** (с адреса 0x8000): загрузчик, таблица, приложения (`app`), `otadata`, файловые
+  системы. `nvs` (Wi-Fi, ключи) и `phy_init` (калибровка радио) сохраняются с чипа при любом ремонте;
+- **дескриптор Intel** (BIOS ноутбука): Descriptor, BIOS, ME, GbE (MAC — сохраняется с чипа), Platform Data, EC.
+
+Найденная карта видна в диагностике (`layout_auto`) и в подробностях сеанса. Испорченная таблица — находка
+«подпись есть, но разметка испорчена», сеанс идёт дальше без карты. Карта из профиля всегда главнее.
+
+Когда вы сохраняете дамп как эталон, а профиль — только чипа, Дирижёр кладёт в `data/drafts/` **черновик
+профиля платы**: подпись в начале дампа (`content_match`), найденные разделы и рецепт `restore_regions`,
+а если установлен binwalk — его сигнатуры (`binwalk_expect`). Проверьте черновик и перенесите в `profiles/boards/`.

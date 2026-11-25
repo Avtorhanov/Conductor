@@ -11,11 +11,13 @@
 """
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 
 from .checks import CHECKS, DEFAULT_CHECKS, CheckInput, diff_sectors, is_fill, masked, region_diff
 from . import layout as layout_mod
+from . import layout_detect
 from .learning import Learning
 from .memory import Memory, now
 from .models import Finding, Inspection, chip_key
@@ -389,6 +391,45 @@ class Conductor:
         return {"data": self.store.get(chosen["sha"]), "label": chosen["label"],
                 "sha": chosen["sha"], "profile_id": chosen["profile_id"], "preserve": preserve}
 
+    def auto_layout(self, det, data: bytes) -> list:
+        """Карта разделов по содержимому копии «до» (core/layout_detect.py), если в профиле её нет.
+
+        Находка: «ok» — разметка найдена и подставлена в профиль этого сеанса (preserve дополняется);
+        «fail» — подпись есть, а таблица испорчена (разделы не определены, работа как без карты).
+        Профиль в базе не меняется: сеанс получает копию с картой."""
+        prof = det.profile
+        if prof is None or prof.layout or not prof.layout_auto:
+            return []
+        res = layout_detect.detect(data, prof.layout_auto, prof.size or len(data))
+        if res is None:
+            return []
+        if not res.ok:
+            f = Finding("layout_auto", "fail",
+                        f"{res.title}: подпись есть, но разметка испорчена — " + "; ".join(res.problems)
+                        + ". Разделы не определены, работаю без карты.",
+                        ["restore_reference", "restore_image"])
+            self.ui.finding(f)
+            self.log(f"[{f.status}] {f.check}: {f.message}")
+            return [f]
+        preserve = list(prof.preserve)
+        have = {(to_int(r["offset"]), to_int(r["length"])) for r in preserve}
+        for reg in layout_mod.preserve_regions(res.rows):
+            if (reg["offset"], reg["length"]) not in have:
+                preserve.append(reg)
+        det.profile = dataclasses.replace(prof, layout=res.rows, preserve=preserve)
+        kept = [r["title"] for r in res.rows if r["preserve"]]
+        msg = (f"разметка по содержимому ({res.title}): разделов {len(res.rows)} — "
+               + ", ".join(f"«{r['title']}»" for r in res.rows)
+               + (f". Сохраняются с чипа: {', '.join(kept)}" if kept else "")
+               + "".join(f". {n[0].upper()}{n[1:]}" for n in res.notes))
+        f = Finding("layout_auto", "ok", msg)
+        self.ui.finding(f)
+        self.log(f"[{f.status}] {f.check}: {f.message}",
+                 data={"layout_auto": {"detector": res.detector, "regions": [
+                     {k: r[k] for k in ("id", "title", "kind", "offset", "end", "preserve", "restore")}
+                     for r in res.rows]}})
+        return [f]
+
     def diagnose(self, det, data: bytes, verified: bool, ref) -> list:
         findings = []
         specs = det.profile.check_specs(DEFAULT_CHECKS)
@@ -430,6 +471,9 @@ class Conductor:
                 continue
             if r["action"] in ("write_reference", "write_reference_regions") and ref is None:
                 hints.append("восстановить из эталона нельзя — эталона для этого устройства ещё нет")
+                continue
+            if r["action"] == "write_reference_regions" and not det.profile.layout:
+                hints.append("восстановить по разделам нельзя — карта разделов не определилась")
                 continue
             if r["action"] == "write_image" and not image_path:
                 hints.append("можно записать официальный образ: запустите с --image путь/к/файлу.bin")
@@ -601,8 +645,9 @@ class Conductor:
                 return self._finish("blocked_voltage")
 
         ui.step(5, STEPS, "Диагностика")
+        auto = self.auto_layout(det, data)       # до эталона: preserve из найденной карты нужен и ему
         ref = self.find_reference(det, label)
-        diag = self.diagnose(det, data, verified, ref)
+        diag = auto + self.diagnose(det, data, verified, ref)
         findings = inspected + diag            # находки inspect — как диагностика: «block» запрещает запись
 
         ui.step(6, STEPS, "План ремонта")
@@ -688,6 +733,7 @@ class Conductor:
                                       "исправное устройство")
             self.log(f"сохранён эталон «{lbl}»: {sha[:16]}…")
             self.ui.ok(f"эталон «{lbl}» сохранён — с ним будут сравниваться такие же устройства")
+            self._board_draft(det.profile, det.target_class, sha)
         elif answer == "later":
             self.ui.info(f"сохранить позже: {self._cli(f'reference {self.session} --kind before')}")
 
@@ -718,6 +764,7 @@ class Conductor:
                     self.memory.add_reference(s["profile_id"], s["profile_id"], key, after["sha"],
                                               after["size"], sid, "после успешного ремонта")
                     self.ui.ok("эталон сохранён")
+                    self._board_draft(prof, s["target_class"], after["sha"])
         else:
             self.ui.warn("записал неудачу — этот способ теперь будет ниже в списке")
             self.ui.info(f"вернуть копию «до»: {self._cli(f'rollback {sid}')}")
@@ -970,6 +1017,20 @@ class Conductor:
         self.memory.add_reference(s["profile_id"], lbl, chip_key(s["target_class"], fp), snap["sha"],
                                   snap["size"], sid, f"вручную из снимка «{snap['kind']}»")
         self.ui.ok(f"эталон «{lbl}» сохранён из снимка «{snap['kind']}» сеанса №{sid}")
+        self._board_draft(self.profiles.get(s["profile_id"]), s["target_class"], snap["sha"])
+
+    def _board_draft(self, profile, target_class: str, sha: str) -> None:
+        """После сохранения эталона: черновик профиля ПЛАТЫ в data/drafts/ (подпись, разметка, binwalk).
+        Ошибка черновика не мешает эталону — он уже сохранён."""
+        if profile is None or profile.content_match:
+            return                                  # плата уже узнаётся своим профилем
+        try:
+            path = self.learning.record_board(profile, target_class, self.store.get(sha), sha)
+        except Exception as e:
+            self.log(f"черновик профиля платы не создан: {e}", "warn")
+            return
+        if path is not None:
+            self.ui.info(f"черновик профиля платы (проверьте и перенесите в profiles/boards/): {path}")
 
     def export(self, sid: int, kind: str, dest: str) -> None:
         snap = self.memory.snapshot(sid, kind)

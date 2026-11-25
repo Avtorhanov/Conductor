@@ -19,6 +19,7 @@ from pathlib import Path
 
 import yaml
 
+from ..core import layout_detect
 from ..core.params import read_all as param_rows
 from ..core.pipeline import OUTCOMES, Conductor
 from ..core.ui import ConsoleUI
@@ -394,10 +395,19 @@ def session_detail(c, sid: int) -> dict | None:
     rows = c.memory.events(sid)
     events = [{"ts": e["ts"][11:19], "level": e["level"], "message": e["message"]} for e in rows]
     regions = []                                  # разделы с отличиями от эталона (карта разделов профиля)
+    auto_layout = None                            # карта, найденная по содержимому (core/layout_detect.py)
     for e in rows:
         try:
-            regions = (json.loads(e["data"]) if e["data"] else {}).get("regions") or regions
-        except (TypeError, ValueError, AttributeError):
+            extra = json.loads(e["data"]) if e["data"] else {}
+            regions = extra.get("regions") or regions
+            if extra.get("layout_auto"):
+                found = extra["layout_auto"]
+                auto_layout = {"detector": found.get("detector", ""),
+                               "title": layout_detect.TITLES.get(found.get("detector"), found.get("detector", "")),
+                               "regions": [{"title": r["title"], "span": f"0x{r['offset']:X}…0x{r['end']:X}",
+                                            "preserve": bool(r.get("preserve")), "restore": bool(r.get("restore"))}
+                                           for r in found.get("regions") or []]}
+        except (TypeError, ValueError, AttributeError, KeyError):
             pass
     actions = []
     kinds = {sn["kind"] for sn in snaps}
@@ -413,7 +423,8 @@ def session_detail(c, sid: int) -> dict | None:
     if s["profile_id"] and any(sn["verified"] for sn in snaps if sn["kind"] != "written"):
         actions.append({"label": "Сделать эталоном", "action": "reference",
                         "params": {"session": sid, "label": "ask"}})
-    return {"session": info, "snapshots": snaps, "events": events, "actions": actions, "regions": regions}
+    return {"session": info, "snapshots": snaps, "events": events, "actions": actions, "regions": regions,
+            "auto_layout": auto_layout}
 
 
 def params_view(c, sid: int | None = None) -> dict | None:

@@ -28,6 +28,7 @@ esptool, esptool.py, binwalk, sigrok-cli), которые вызывают:  fak
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import random
@@ -82,13 +83,30 @@ def healthy_avr() -> tuple:
     return bytes(flash), bytes(eeprom)
 
 
+# Таблица разделов ESP-IDF «singleapp»: (метка, тип, подтип, смещение, размер)
+ESP_PARTITIONS = [("nvs", 1, 0x02, 0x9000, 0x6000), ("phy_init", 1, 0x01, 0xF000, 0x1000),
+                  ("factory", 0, 0x00, 0x10000, 0x100000)]
+
+
+def esp_partition_table(parts=ESP_PARTITIONS, md5: bool = True) -> bytes:
+    """Двоичная таблица разделов, как её пишет gen_esp32part.py: записи по 32 байта, MD5, конец 0xFF."""
+    out = b""
+    for label, ptype, sub, off, size in parts:
+        out += (b"\xAA\x50" + bytes([ptype, sub]) + off.to_bytes(4, "little") + size.to_bytes(4, "little")
+                + label.encode().ljust(16, b"\x00") + (0).to_bytes(4, "little"))
+    if md5:
+        out += b"\xEB\xEB" + b"\xFF" * 14 + hashlib.md5(out).digest()
+    return out + b"\xFF" * 32
+
+
 def healthy_esp() -> bytes:
     rnd = random.Random(32)
     img = bytearray(b"\xff" * (4 * 1024 * 1024))
     img[0x1000] = 0xE9                                   # заголовок загрузчика
     img[0x1001:0x7000] = rnd.randbytes(0x7000 - 0x1001)
-    img[0x8000:0x8002] = b"\xAA\x50"                     # таблица разделов
-    img[0x9000:0x9010] = b"NVS:wifi=home123"             # «уникальные» данные
+    table = esp_partition_table()                        # таблица разделов (с 0.7.0 S4b — настоящая)
+    img[0x8000:0x8000 + len(table)] = table
+    img[0x9000:0x9010] = b"NVS:wifi=home123"             # «уникальные» данные (раздел nvs)
     img[0x10000:0x10000 + 300000] = rnd.randbytes(300000)
     return bytes(img)
 

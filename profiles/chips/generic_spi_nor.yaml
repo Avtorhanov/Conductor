@@ -13,6 +13,10 @@ voltage: null          # неизвестно! сверяйте маркиров
 size: null
 allow_write: true
 
+# Разметка по содержимому (core/layout_detect.py): дескриптор Intel (BIOS ноутбука), таблица ESP32.
+# Подписи нет — всё как раньше; есть — разделы в диагностике, MAC из GbE и NVS сохраняются с чипа.
+layout_auto: all
+
 checks:
   - stable_read
   - not_zero

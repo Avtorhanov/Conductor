@@ -16,6 +16,8 @@ fuses — расшифровка фьюзов и lock-битов, id_register �
 их читает Plugin.inspect (только чтение).
 layout — карта разделов (core/layout.py): разделы с preserve: true дополняют preserve, разделы с
 restore: true может взять из эталона рецепт с действием write_reference_regions.
+layout_auto — определители разметки (core/layout_detect.py): [esp_partitions, intel_ifd] или all. Если карты
+layout нет, сеанс строит её по содержимому копии «до» (таблица разделов ESP32, дескриптор Intel).
 Профили навыков (skills/<id>/profiles/) загружаются вместе с основными.
 """
 from __future__ import annotations
@@ -27,6 +29,7 @@ import yaml
 
 from . import fuses as fuses_mod
 from . import layout as layout_mod
+from . import layout_detect
 from .params import normalize as normalize_params
 
 KNOWN_ACTIONS = {"write_reference", "write_image", "write_reference_regions"}
@@ -59,6 +62,7 @@ class Profile:
     fuses: dict = field(default_factory=dict)
     id_register: dict = field(default_factory=dict)
     layout: list = field(default_factory=list)
+    layout_auto: list = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, d: dict, path: Path) -> "Profile":
@@ -92,8 +96,10 @@ class Profile:
             if size and p["offset"] + p["size"] > size:
                 raise ValueError(f"параметр «{p['id']}» выходит за размер {size} байт")
         layout = layout_mod.normalize(d.get("layout"), size)
-        if not layout and any(r["action"] == "write_reference_regions" for r in recipes):
-            raise ValueError("рецепту с действием write_reference_regions нужна карта разделов layout")
+        layout_auto = layout_detect.normalize_names(d.get("layout_auto"))
+        if not layout and not layout_auto and any(r["action"] == "write_reference_regions" for r in recipes):
+            raise ValueError("рецепту с действием write_reference_regions нужна карта разделов layout "
+                             "(или определитель layout_auto)")
         preserve = list(d.get("preserve") or [])
         have = {(to_int(r["offset"]), to_int(r["length"])) for r in preserve}
         for reg in layout_mod.preserve_regions(layout):
@@ -111,7 +117,7 @@ class Profile:
             params=params, bus=bus, tool=tool,
             fuses=fuses_mod.normalize(d.get("fuses")),
             id_register=fuses_mod.normalize_id_register(d.get("id_register")),
-            layout=layout,
+            layout=layout, layout_auto=layout_auto,
         )
 
     @property
