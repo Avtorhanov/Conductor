@@ -18,7 +18,7 @@ steps:
     code: sudo raspi-config     # Interface Options → SPI → Enable
   - Выключите Pi. Подключите провода по рисунку — короткие, до 15 см.
   - WP (вывод 3) и HOLD (вывод 7) чипа — к 3,3 В, иначе чип может не отвечать.
-  - text: Укажите программатор в config.yaml.
+  - text: Укажите программатор — «Прибор» → «Инструменты» → flashrom_spi → «Настроить».
     code: |
       plugins:
         flashrom_spi:

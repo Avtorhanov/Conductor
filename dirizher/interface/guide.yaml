@@ -318,20 +318,13 @@ lessons:
       - Подключите BP5 по USB — он появится как /dev/ttyACM0. Права — группа dialout (один раз, затем перелогиниться).
       - text: Прищепка или провода к микросхеме — SDA, SCL, GND и VCC от BP5. Вывод WP (7) на время записи — к GND.
         code: sudo usermod -aG dialout $USER
-      - text: Включите лезвие — «Прибор» → «Инструменты» → bp5_i2c → «Настроить» (или в config.yaml, образец — docs/config-snippet-0.3.0.yaml). Модель — как на корпусе.
-        code: |
-          plugins:
-            bp5_i2c:
-              enabled: true
-              port: "/dev/ttyACM0"
-              eeprom: "24C02"
-              psu_voltage: 3.3      # BP5 питает чип; 0 — питание от платы
+      - text: Включите лезвие — «Прибор» → «Инструменты» → bp5_i2c → «Настроить» — поля и примеры в форме. Модель — как на корпусе.
       - text: «Узнать, что за микросхема». У 24Cxx нет ID — Дирижёр проверит, что микросхема отвечает по адресу 0x50, а модель возьмёт из настроек.
         code: python3 -m dirizher detect
       - Затем «Снять копию с исправного устройства». Формат ответов BP5 проверен только на эмуляторе (ПРОВЕРИТЬ НА ЖЕЛЕЗЕ).
     check: Журнал сеанса — строки помощника bp5_i2c (FOUND, READ 256). Если микросхема молчит — проверьте подтяжки и питание.
     related:
-      - label: Настроить bp5_i2c (форма, без правки config.yaml)
+      - label: Настроить bp5_i2c (форма)
         action: tool
         params: {name: bp5_i2c}
       - label: "Схема подключения Bus Pirate 5"
@@ -352,14 +345,7 @@ lessons:
         code: |
           curl --proto '=https' --tlsv1.2 -LsSf https://github.com/probe-rs/probe-rs/releases/latest/download/probe-rs-tools-installer.sh | sh
           sudo apt install openocd        # запасной путь
-      - text: Модель МК по SWD надёжно не узнать — укажите её сами. Не включайте probe_rs и openocd одновременно.
-        code: |
-          plugins:
-            probe_rs:
-              enabled: true
-              chip: "STM32F103C8"
-              flash_base: 0x08000000
-              flash_size: 65536
+      - text: Модель МК по SWD надёжно не узнать — укажите её в «Настроить» (chip, flash_size). Не включайте probe_rs и openocd одновременно.
       - Если чтение не проходит из-за защиты (RDP) — Дирижёр её не снимает. Снятие стирает прошивку, а обход защит — вне задач проекта.
     check: «Узнать, что за микросхема» → «модель из настроек, Cortex-M3». Форматы вывода — ПРОВЕРИТЬ НА ЖЕЛЕЗЕ.
     related:
@@ -392,12 +378,7 @@ lessons:
           sudo cp system/99-dirizher-tools.rules /etc/udev/rules.d/ && sudo udevadm control --reload-rules
       - text: Точное имя микросхемы — из списка minipro.
         code: minipro -L W25Q64
-      - text: Впишите его — «Прибор» → «Инструменты» → minipro → «Настроить» (или в config.yaml). Класс (SPI, I2C, параллельная) Дирижёр определит по имени.
-        code: |
-          plugins:
-            minipro:
-              enabled: true
-              device: "W25Q64BV"
+      - text: Впишите его — «Прибор» → «Инструменты» → minipro → «Настроить». Класс (SPI, I2C, параллельная) Дирижёр определит по имени.
       - Микроконтроллеры через minipro Дирижёр не обслуживает — стирание заденет EEPROM и фьюзы.
     check: «Узнать, что за микросхема» → ID из панельки. Текст minipro — ПРОВЕРИТЬ НА ЖЕЛЕЗЕ.
     related:
@@ -419,17 +400,7 @@ lessons:
     steps:
       - text: Поставьте avrdude, подключите USBasp к разъёму ISP (6 или 10 выводов).
         code: sudo apt install avrdude
-      - text: USBasp обычно работает на 5 В — укажите это, Дирижёр сверит с платой.
-        code: |
-          plugins:
-            avrdude:
-              enabled: true
-              programmer: "usbasp"
-              part: "m328p"
-              programmer_voltage: 5.0
-              memories: [flash, eeprom]
-              flash_size: 32768
-              eeprom_size: 1024
+      - text: USBasp обычно работает на 5 В — укажите это в «Настроить» (programmer_voltage), Дирижёр сверит с платой.
       - Подпись 0x000000 или 0xFFFFFF — нет связи — проверьте RESET, питание и кварц; попробуйте bitclock 10.
     check: «Узнать, что за микросхема» → «подпись 0x1E950F». Строку avrdude — ПРОВЕРИТЬ НА ЖЕЛЕЗЕ.
     related:
@@ -455,12 +426,7 @@ lessons:
       - text: Поставьте esptool.
         code: pipx install esptool
       - Переведите ESP в режим загрузчика — GPIO0 к GND при сбросе (на платах разработчика — кнопки BOOT и EN). Логика USB-UART — только 3.3 В.
-      - text: Включите лезвие.
-        code: |
-          plugins:
-            esptool:
-              enabled: true
-              port: "/dev/ttyUSB0"
+      - text: Включите лезвие — «Прибор» → «Инструменты» → esptool → «Настроить».
       - В отпечаток входит MAC — откат возможен только на ту же плату. При шифровании флеша эталон с другой платы не поможет.
     check: «Узнать, что за микросхема» → чип, MAC и размер флеша. Строки esptool — ПРОВЕРИТЬ НА ЖЕЛЕЗЕ.
     related:
@@ -483,14 +449,7 @@ lessons:
       - text: Поставьте sigrok-cli и подключите анализатор (дешёвые — на чипе CY7C68013A, драйвер fx2lafw).
         code: sudo apt install sigrok-cli
       - Провода к CLK, MOSI, MISO, CS и обязательно GND. Входы дешёвых анализаторов — до 5 В.
-      - text: Настройки — секция sigrok в config.yaml (необязательна).
-        code: |
-          sigrok:
-            channels: "D0,D1,D2,D3"
-            samplerate: "1m"
-            time_ms: 2000
-            decode: "spi:clk=D0:mosi=D1:miso=D2:cs=D3"
-            annotation: "spi"
+      - text: Настройки замера (каналы, скорость) — необязательная секция sigrok в config.yaml; по умолчанию всё работает.
       - Нажмите «Записать сигналы» и включите устройство. Запись и расшифровка сохранятся в data/captures/.
     check: В расшифровке SPI команды 03 или 0B — процессор читает флеш. Тишина — проблема раньше флеша (питание, кварц).
     related:
@@ -526,7 +485,7 @@ lessons:
   tool_cards:
     group: work
     title: Все инструменты — коротко
-    why: Подробные карточки — docs/INTEGRATIONS.md. Здесь — что для чего.
+    why: Подробно — в карточках справочника («Прибор» → «Подключить инструмент»). Здесь — что для чего.
     steps:
       - flashrom — SPI-флешки 25xx (CH341A, SPI Raspberry Pi).
       - Bus Pirate 5 — I2C EEPROM 24Cxx.
@@ -584,9 +543,7 @@ lessons:
     why: Флешка или карта памяти могут отказать. Зеркало дублирует каждую копию дампа в другое место.
     steps:
       - Подключите вторую флешку или SSD и узнайте путь к ней — например /media/pi/BACKUP.
-      - text: Впишите путь в config.yaml.
-        code: |
-          mirror_dir: /media/pi/BACKUP/dirizher
+      - text: "Путь запишите руками (это не настройка лезвия, формы нет): config.yaml → mirror_dir: /media/pi/BACKUP/dirizher"
       - text: Раз в неделю копируйте всю папку data/ целиком.
         code: rsync -a data/ /media/pi/BACKUP/data-copy/
     check: Если основная копия повредится, Дирижёр сам достанет её из зеркала — это проверяет автотест.
@@ -719,10 +676,7 @@ lessons:
     steps:
       - Найдите маркировку чипа и даташит. Серии W25Q…FW и …JW, MX25U, GD25LQ обычно на 1.8 В — сверьте по даташиту.
       - Поставьте переходник 1.8 В между программатором и прищепкой.
-      - text: Укажите напряжение адаптера в config.yaml.
-        code: |
-          safety:
-            programmer_voltage: 1.8
+      - text: Укажите напряжение адаптера — «Прибор» → «Инструменты» → ваше лезвие → «Настроить» → programmer_voltage (например 1.8).
       - Если в профиле напряжение не указано, Дирижёр спросит вас. Отвечайте «да», только если сверили по даташиту.
     check: В шаге 3 должно быть «напряжение совместимо».
 
@@ -897,11 +851,7 @@ lessons:
               def probe(self):        # ТОЛЬКО чтение идентификаторов
                   res = self.run(["probe-rs", "info"], timeout=60)
                   ...                 # разобрать res.out → Detection
-      - text: Включите плагин в config.yaml.
-        code: |
-          plugins:
-            probe_rs:
-              enabled: true
+      - text: Включите плагин — «Прибор» → «Инструменты» → ваш плагин → «Настроить».
       - Создайте профиль с class — mcu.arm.
       - text: Тест без железа — подставная программа. Скрипт с именем настоящей программы печатает типичный вывод; папку с ним ставят первой в PATH.
         code: |

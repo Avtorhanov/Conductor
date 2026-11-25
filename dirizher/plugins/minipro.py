@@ -96,9 +96,9 @@ class MiniproPlugin(Plugin):
     # ---------- интерфейс плагина ----------
     def available(self) -> tuple:
         if not shutil.which("minipro"):
-            return False, "minipro не установлен (см. docs/INTEGRATIONS.md, раздел minipro)"
+            return False, "minipro не установлен (как поставить — карточка «minipro»: python3 -m dirizher catalog minipro)"
         if not self.device:
-            return False, "укажите device в config.yaml → plugins: minipro (имя из `minipro -L …`)"
+            return False, "укажите device (имя из `minipro -L …`) — «Прибор» → «Инструменты» → minipro → «Настроить»"
         if MCU_RE.search(self.device):
             return False, (f"«{self.device}» — микроконтроллер: через minipro не обслуживается "
                            f"(для AVR используйте плагин avrdude)")

@@ -105,7 +105,7 @@ class OpenOCDPlugin(Plugin):
             return False, "OpenOCD не установлен (sudo apt install openocd)"
         missing = [k for k in ("interface", "target", "mcu", "flash_size") if not self.settings.get(k)]
         if missing:
-            return False, "укажите в config.yaml → plugins: openocd: " + ", ".join(missing)
+            return False, "укажите в настройках («Прибор» → «Инструменты» → openocd → «Настроить»): " + ", ".join(missing)
         return True, f"{self.settings['interface']} + {self.settings['target']}, МК из настроек: {self.mcu}"
 
     def version(self):
@@ -119,7 +119,7 @@ class OpenOCDPlugin(Plugin):
         core = CORE_RE.search(text)
         if not idcode and not core:
             if NO_ADAPTER.search(text):
-                raise RuntimeError("OpenOCD не нашёл адаптер: проверьте USB и interface в config.yaml.\n"
+                raise RuntimeError("OpenOCD не нашёл адаптер: проверьте USB и поле interface в настройках лезвия.\n"
                                    + fail_text(res, ""))
             if not res.ok:
                 raise RuntimeError("адаптер есть, но микроконтроллер не отвечает: проверьте SWDIO/SWCLK/GND, "

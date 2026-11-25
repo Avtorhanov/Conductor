@@ -19,7 +19,7 @@
 Вывод WP микросхемы при записи должен быть на GND, иначе запись не пройдёт сверку (это безопасно:
 ядро предложит вернуть копию «до»).
 
-ПРОВЕРИТЬ НА ЖЕЛЕЗЕ: см. docs/INTEGRATIONS.md, раздел «I2C самого Raspberry Pi».
+ПРОВЕРИТЬ НА ЖЕЛЕЗЕ: карточка «I2C самого Pi»: python3 -m dirizher catalog rpi_i2c.
 """
 from __future__ import annotations
 
@@ -112,7 +112,7 @@ class PiI2CPlugin(Plugin):
     # ---------- интерфейс плагина ----------
     def available(self) -> tuple:
         if self.model not in EEPROM_SIZES:
-            return False, f"укажите eeprom в config.yaml → plugins: pi_i2c ({', '.join(EEPROM_SIZES)})"
+            return False, f"укажите eeprom — «Прибор» → «Инструменты» → pi_i2c → «Настроить» ({', '.join(EEPROM_SIZES)})"
         if not Path(self.bus).exists():
             return False, (f"шины {self.bus} нет — включите I2C: sudo raspi-config → Interface Options → I2C, "
                            "затем перезагрузка (карточка rpi_i2c)")

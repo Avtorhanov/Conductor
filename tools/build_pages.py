@@ -269,6 +269,14 @@ class Recorder:
         for it in items:
             if it["kind"] == "article":
                 articles[it["id"]] = self.req("GET", f"/api/help/article?id={it['id']}")
+        tools = {}
+        for pl in self.req("GET", "/api/device?sim=1").get("plugins", []):
+            if pl.get("title") == "ошибка загрузки":
+                continue
+            try:  # настройки лезвий — только просмотр; «Проверить» и «Сохранить» в демо идут на прибор
+                tools[pl["name"]] = self.req("GET", f"/api/tool?name={pl['name']}")
+            except RuntimeError:
+                pass
         hello = self.req("GET", "/api/hello")
         hello.update({"authed": True, "local": False, "demo": True, "demo_text": DEMO_TEXT, "sim_default": True,
                       "connect": {"urls": [], "pin": None, "need_pin": False}})
@@ -276,7 +284,7 @@ class Recorder:
                 "roadmap": self.req("GET", "/api/roadmap"), "catalog": cat, "cards": cards,
                 # список переходников; сами проверки (USB, группы, программы) — только на приборе
                 "connect": self.req("GET", "/api/connect?sim=1"),
-                "help_items": self.clean(items), "articles": articles,
+                "help_items": self.clean(items), "articles": articles, "tools": tools,
                 "builder_fields": self.req("GET", "/api/builder/fields"),
                 "builder_drafts": self.req("GET", "/api/builder/drafts")}
 

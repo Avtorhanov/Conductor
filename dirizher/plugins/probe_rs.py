@@ -110,9 +110,9 @@ class ProbeRsPlugin(Plugin):
     # ---------- интерфейс плагина ----------
     def available(self) -> tuple:
         if not shutil.which("probe-rs"):
-            return False, "probe-rs не установлен (см. docs/INTEGRATIONS.md, раздел probe-rs)"
+            return False, "probe-rs не установлен (как поставить — карточка «probe-rs»: python3 -m dirizher catalog probe_rs)"
         if not self.chip or not self.flash_size:
-            return False, "укажите chip и flash_size в config.yaml → plugins: probe_rs"
+            return False, "укажите chip и flash_size — «Прибор» → «Инструменты» → probe_rs → «Настроить»"
         return True, f"чип из настроек: {self.chip}, флеш {self.flash_size // 1024} КБ @ 0x{self.flash_base:08X}"
 
     def version(self):

@@ -20,7 +20,7 @@ inspect (0.7.0, только чтение): замер на выводе VOUT, �
 (помощник печатает «VOUT=3.30»). Ядро сверяет замер с профилем и напряжением адаптера: просевшее
 питание или чип не на то напряжение — стоп. При psu_voltage: 0 замера нет — всё как раньше.
 
-ПРОВЕРИТЬ НА ЖЕЛЕЗЕ: см. docs/INTEGRATIONS.md, раздел Bus Pirate 5.
+ПРОВЕРИТЬ НА ЖЕЛЕЗЕ: карточка «Bus Pirate 5»: python3 -m dirizher catalog bus_pirate5.
 """
 from __future__ import annotations
 
@@ -107,7 +107,7 @@ class BusPirateI2CPlugin(Plugin):
     # ---------- интерфейс плагина ----------
     def available(self) -> tuple:
         if self.model not in EEPROM_SIZES:
-            return False, f"укажите eeprom в config.yaml → plugins: bp5_i2c ({', '.join(EEPROM_SIZES)})"
+            return False, f"укажите eeprom — «Прибор» → «Инструменты» → bp5_i2c → «Настроить» ({', '.join(EEPROM_SIZES)})"
         if not Path(self.port).exists():
             return False, f"Bus Pirate не найден на {self.port} (проверьте кабель и группу dialout)"
         return True, f"{self.port}, {self.model} @ {self.address}"

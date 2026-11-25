@@ -41,7 +41,7 @@ targets: [memory.i2c_eeprom]
 adapters: [bus_pirate5]
 lesson: tool_bp5
 examples:
-  - {title: Через Дирижёр, cmd: "python3 -m dirizher detect", note: "лезвие bp5_i2c включено в config.yaml"}
+  - {title: Через Дирижёр, cmd: "python3 -m dirizher detect", note: "лезвие bp5_i2c включено в «Прибор» → «Инструменты» → «Настроить»"}
 verify:
   - "Пункт I2C в меню m (ищется по тексту), вопросы после W 3.3, раскраска терминала"
   - Время чтения 24C256

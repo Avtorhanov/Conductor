@@ -99,14 +99,14 @@ class AvrdudePlugin(Plugin):
         if not shutil.which("avrdude"):
             return False, "avrdude не установлен (sudo apt install avrdude)"
         if not self.settings.get("part"):
-            return False, "укажите part (например, m328p) в config.yaml → plugins: avrdude"
+            return False, "укажите part (например, m328p) — «Прибор» → «Инструменты» → avrdude → «Настроить»"
         bad = [m for m in self.memories if m not in ("flash", "eeprom")]
         if bad:
             return False, f"memories может содержать только flash и eeprom (указано: {', '.join(bad)})"
         sizes = self._sizes()
         missing = [f"{m}_size" for m in self.memories if not sizes[m]]
         if missing:
-            return False, "укажите в config.yaml → plugins: avrdude: " + ", ".join(missing)
+            return False, "укажите в настройках («Прибор» → «Инструменты» → avrdude → «Настроить»): " + ", ".join(missing)
         return True, (f"{self.settings.get('programmer', 'usbasp')} → {self.settings['part']}, "
                       f"образ: {' + '.join(self.memories)}")
 
