@@ -417,6 +417,7 @@ class Conductor:
             if (reg["offset"], reg["length"]) not in have:
                 preserve.append(reg)
         det.profile = dataclasses.replace(prof, layout=res.rows, preserve=preserve)
+        self._auto = (prof, res)                     # для сверки с эталоном (auto_layout_reference)
         kept = [r["title"] for r in res.rows if r["preserve"]]
         msg = (f"разметка по содержимому ({res.title}): разделов {len(res.rows)} — "
                + ", ".join(f"«{r['title']}»" for r in res.rows)
@@ -428,6 +429,41 @@ class Conductor:
                  data={"layout_auto": {"detector": res.detector, "regions": [
                      {k: r[k] for k in ("id", "title", "kind", "offset", "end", "preserve", "restore")}
                      for r in res.rows]}})
+        return [f]
+
+    def auto_layout_reference(self, det, ref) -> list:
+        """Карта взята из чипа (layout_auto), а чип может быть испорчен: у дескриптора Intel контрольной суммы нет.
+        Есть эталон — тот же определитель разбирает и его. Совпало (те же разделы и границы) — всё как было.
+        Не совпало или в эталоне не найдено — находка «warn»: карты в сеансе нет (restore_regions не предлагается,
+        полная запись эталона остаётся), уникальные области — по разметке эталона, если она есть, иначе — с чипа."""
+        auto, self._auto = getattr(self, "_auto", None), None
+        if auto is None or ref is None:
+            return []
+        base, res = auto
+        theirs = layout_detect.detect(ref["data"], [res.detector], base.size or len(ref["data"]))
+        key = lambda rows: [(r["id"], r["offset"], r["end"]) for r in rows]
+        if theirs is not None and theirs.ok and key(theirs.rows) == key(res.rows):
+            return []
+        chip_preserve = layout_mod.preserve_regions(res.rows)
+        source = theirs.rows if theirs is not None and theirs.ok else res.rows
+        extra = layout_mod.preserve_regions(source)
+        preserve = list(base.preserve) + [r for r in extra if r not in base.preserve]
+        det.profile = dataclasses.replace(det.profile, layout=[], preserve=preserve)
+        ref["preserve"] = ([r for r in ref["preserve"] if r not in chip_preserve]
+                           + [r for r in extra if r not in ref["preserve"]])
+        if theirs is None or not theirs.ok:
+            why = f"в эталоне {res.title} не найден" if theirs is None else f"в эталоне {res.title} испорчен"
+            keep = "уникальные области — по разметке чипа"
+        else:
+            diff = sorted({r["title"] for r in theirs.rows if (r["id"], r["offset"], r["end"]) not in key(res.rows)}
+                          | {r["title"] for r in res.rows if (r["id"], r["offset"], r["end"]) not in key(theirs.rows)})
+            why = "отличаются: " + ", ".join(f"«{t}»" for t in diff)
+            keep = "уникальные области — по разметке эталона"
+        f = Finding("layout_auto", "warn",
+                    f"разметка на чипе и в эталоне различается ({why}) — частичное восстановление не предлагаю; "
+                    f"{keep}. Возможно, испорчена сама таблица на чипе.")
+        self.ui.finding(f)
+        self.log(f"[{f.status}] {f.check}: {f.message}")
         return [f]
 
     def diagnose(self, det, data: bytes, verified: bool, ref) -> list:
@@ -645,8 +681,10 @@ class Conductor:
                 return self._finish("blocked_voltage")
 
         ui.step(5, STEPS, "Диагностика")
+        self._auto = None
         auto = self.auto_layout(det, data)       # до эталона: preserve из найденной карты нужен и ему
         ref = self.find_reference(det, label)
+        auto += self.auto_layout_reference(det, ref)
         diag = auto + self.diagnose(det, data, verified, ref)
         findings = inspected + diag            # находки inspect — как диагностика: «block» запрещает запись
 

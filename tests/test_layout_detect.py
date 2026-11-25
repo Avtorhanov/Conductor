@@ -209,7 +209,7 @@ class HelperTests(unittest.TestCase):
 
 
 # =====================================================================
-class SimulatorIfdTests(unittest.TestCase):
+class SimIfdBase(unittest.TestCase):
     """BIOS ноутбука на учебной микросхеме W25Q64: профиль чипа + layout_auto: all."""
 
     def setUp(self):
@@ -234,6 +234,8 @@ class SimulatorIfdTests(unittest.TestCase):
         sim.do_reset()
         sim.write(None, data)
 
+
+class SimulatorIfdTests(SimIfdBase):
     def test_laptop_bios_cycle_keeps_mac(self):
         healthy = ifd_image()
         c = self.conductor(["yes"])
@@ -291,6 +293,74 @@ class SimulatorIfdTests(unittest.TestCase):
         text = "\n".join(c.ui.lines)
         self.assertNotIn("layout_auto", text)
         self.assertEqual(list((c.data_dir / "drafts").glob("board_*.yaml")), [])
+
+
+class ReferenceLayoutTests(SimIfdBase):
+    """Карта из чипа сверяется с разметкой эталона: у дескриптора Intel нет контрольной суммы."""
+
+    def setUp(self):
+        super().setUp()
+        prof_dir = self.tmp / "profiles"
+        shutil.copytree(ROOT / "profiles", prof_dir)
+        chip = prof_dir / "chips" / "winbond_w25q64.yaml"
+        chip.write_text(chip.read_text(encoding="utf-8").replace(
+            "recipes:\n", "recipes:\n  - id: restore_regions\n    title: Восстановить только повреждённые разделы\n"
+            "    action: write_reference_regions\n", 1), encoding="utf-8")
+        self.cfg["profiles_dir"] = prof_dir
+
+    def reference(self) -> bytes:
+        healthy = ifd_image()
+        c = self.conductor(["yes"])
+        self.put(c, healthy)
+        c.run()
+        return healthy
+
+    def test_same_layout_offers_regions(self):
+        self.reference()
+        broken = bytearray(ifd_image(mac=b"\x00\x1b\x21\xAA\xBB\xCC"))
+        broken[BIOS[0]:BIOS[0] + 0x8000] = b"\x00" * 0x8000
+        c = self.conductor([1, "yes"])                           # второй способ — только разделы
+        self.put(c, bytes(broken))
+        sid = c.run()
+        text = "\n".join(c.ui.lines)
+        self.assertNotIn("различается", text)
+        self.assertIn("Что сделать?", text)
+        self.assertEqual(c.memory.session(sid)["recipe_id"], "restore_regions", text)
+        self.assertEqual(c.plugin("simulator").image.read_bytes()[GBE[0]:GBE[0] + 6], b"\x00\x1b\x21\xAA\xBB\xCC")
+
+    def test_damaged_gbe_region_on_chip(self):
+        healthy = self.reference()
+        # на чипе испорчен регистр GbE: правдоподобная, но неверная граница (0x1000…0x2000 вместо …0x3000)
+        regions = [flreg(0, 0x1000), flreg(*BIOS), flreg(*ME), flreg(0x1000, 0x2000), 0x00007FFF]
+        broken = bytearray(ifd_image(regions=regions, mac=b"\x00\x1b\x21\xAA\xBB\xCC"))
+        broken[0x2000:0x2010] = b"GBE-TAIL-OF-CHIP"          # хвост настоящего GbE — тоже данные этой платы
+        c = self.conductor(["yes"])
+        self.put(c, bytes(broken))
+        sid = c.run()
+        text = "\n".join(c.ui.lines)
+        self.assertIn("⚠ layout_auto: разметка на чипе и в эталоне различается (отличаются: «GbE — сетевая карта "
+                      "(MAC)») — частичное восстановление не предлагаю; уникальные области — по разметке эталона.",
+                      text)
+        self.assertNotIn("Что сделать?", text)                   # restore_regions в план не попал
+        self.assertNotIn("По разделам:", text)                   # карты в сеансе нет
+        self.assertEqual(c.memory.session(sid)["recipe_id"], "restore_reference", text)
+        self.assertEqual(c.memory.session(sid)["outcome"], "repaired", text)
+        flash = c.plugin("simulator").image.read_bytes()
+        self.assertEqual(flash[:0x1000], healthy[:0x1000])                       # дескриптор — из эталона
+        self.assertEqual(flash[GBE[0]:GBE[0] + 6], b"\x00\x1b\x21\xAA\xBB\xCC")    # MAC — свой
+        self.assertEqual(flash[0x2000:0x2010], b"GBE-TAIL-OF-CHIP")               # GbE по границам эталона
+        self.assertEqual(flash[BIOS[0]:BIOS[1]], healthy[BIOS[0]:BIOS[1]])
+
+    def test_reference_without_layout(self):
+        c = self.conductor(["yes"])
+        self.put(c, b"\x5A" * 16 + b"\xff" * (8 * MB - 16))     # эталон без дескриптора
+        c.run()
+        c = self.conductor(dry_run=True)
+        self.put(c, ifd_image())
+        c.run()
+        text = "\n".join(c.ui.lines)
+        self.assertIn("(в эталоне дескриптор Intel (IFD) не найден) — частичное восстановление не предлагаю; "
+                      "уникальные области — по разметке чипа", text)
 
 
 # =====================================================================
