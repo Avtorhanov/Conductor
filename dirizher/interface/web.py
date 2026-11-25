@@ -390,6 +390,15 @@ class App:
                 p[key] = str(v)
             elif key == "set":
                 p[key] = guide.clean_set(v)
+            elif key == "baud":
+                v = str(v).strip().lower()
+                if v != "auto" and not (v.isdigit() and len(v) <= 7):
+                    raise ValueError("скорость — число (например, 115200) или auto")
+                p[key] = v
+            elif key in ("target", "adapter"):
+                if not isinstance(v, str) or not guide.ID_PARAM.match(v):
+                    raise ValueError(f"{key}: ожидался id (латиница, цифры, _)")
+                p[key] = v
         if meta.get("pick") and "session" not in p:
             raise ValueError("не выбран сеанс")
         if action == "sim" and "do" not in p:
@@ -445,7 +454,8 @@ class App:
         if job.result is None:
             job.result = {"session": sid, "outcome": outcome,
                           "outcome_text": OUTCOMES.get(outcome, outcome) if outcome else "готово"}
-        job.next = guide.after(action, dict(params, dry_run=dry_run), outcome, sid, sim, hints)
+        chosen = {"target": exec_params["target"]} if exec_params.get("target") else {}   # модель выбрана
+        job.next = guide.after(action, dict(params, dry_run=dry_run, **chosen), outcome, sid, sim, hints)
         job.finish()
 
     def shutdown(self) -> None:
@@ -708,6 +718,27 @@ def api_download(h: Handler, q):
     h.wfile.write(data)
 
 
+@route("GET", "/api/journal")
+def api_journal(h: Handler, q):
+    """Журнал сеанса для разработки: JSON-файл без дампов и личных данных (скачать на телефон)."""
+    from ..core import journal
+
+    sid = int(q["sid"])
+    with h.app.conductor(_sim(q)) as c:
+        b = journal.bundle(c, sid)
+    if b is None:
+        return h.fail(404, f"нет сеанса №{sid}")
+    body = json.dumps(b, ensure_ascii=False, indent=1).encode("utf-8")
+    name = journal.filename(sid, _sim(q))
+    h.send_response(200)
+    h.send_header("Content-Type", "application/json; charset=utf-8")
+    h.send_header("Content-Length", str(len(body)))
+    h.send_header("Content-Disposition", f"attachment; filename=\"{name}\"; filename*=UTF-8''{quote(name)}")
+    h._common_headers()
+    h.end_headers()
+    h.wfile.write(body)
+
+
 @route("GET", "/api/images")
 def api_images(h: Handler, q):
     h.send_json({"items": h.app.images(), "max_mb": h.app.max_upload // (1024 * 1024)})
@@ -919,6 +950,59 @@ def api_catalog_new(h: Handler, q):
         rel = catalog.create(h.app.hood, h.app.cfg, fields, actor=actor(h))
         cid = Path(rel).stem
     h.send_json({"ok": True, "id": cid, "open": rel})
+
+
+# ======================= прибор: начать с переходника =======================
+@route("GET", "/api/connect")
+def api_connect(h: Handler, q):
+    from ..workshop import connect
+    with guide.open_readonly(h.app.cfg, False) as c:          # проверки — про настоящее железо
+        try:
+            v = connect.view(h.app.cfg, q.get("card") or None, c.plugin_report, profiles=c.profiles,
+                             sim=_sim(q))
+        except ValueError as e:
+            return h.fail(404, str(e))
+    h.send_json(v)
+
+
+# ======================= прибор: настройки инструментов =======================
+@route("GET", "/api/tool")
+def api_tool(h: Handler, q):
+    from ..workshop import toolsettings
+    name = q.get("name", "")
+    try:
+        desc = toolsettings.describe(h.app.cfg, name, h.app.hood.root)
+    except toolsettings.ToolSettingsError as e:
+        return h.fail(404, str(e))
+    desc["status"] = toolsettings.status_with(h.app.cfg, name)
+    desc["hood"] = hood_state(h)
+    h.send_json(desc)
+
+
+@route("POST", "/api/tool/check")
+def api_tool_check(h: Handler, q):
+    from ..workshop import toolsettings
+    body = h.read_json()
+    try:
+        res = toolsettings.check(h.app.cfg, h.app.hood, str(body.get("name") or ""), body.get("values") or {})
+    except toolsettings.ToolSettingsError as e:
+        return h.fail(400, str(e))
+    h.send_json(res)
+
+
+@route("POST", "/api/tool/save")
+def api_tool_save(h: Handler, q):
+    from ..workshop import toolsettings
+    need_hood(h)
+    if h.app.busy():
+        raise Busy("идёт задание — настройки инструментов после его окончания")
+    body = h.read_json()
+    try:
+        res = toolsettings.save(h.app.cfg, h.app.hood, str(body.get("name") or ""), body.get("values") or {},
+                                body.get("word"), actor(h))
+    except toolsettings.ToolSettingsError as e:
+        return h.fail(400, str(e))
+    h.send_json(res)
 
 
 # ======================= мастерская: самопроверка =======================

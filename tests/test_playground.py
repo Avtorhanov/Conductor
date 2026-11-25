@@ -117,7 +117,8 @@ class ConsoleMatchesCoreTests(Tmp):
                 c = cond(["yes"])
                 c.plugin("simulator").do_reset()
                 c.run()                                    # эталон с исправной платы
-            c = cond(["yes"], dry_run=(name == "dry"))
+            # после порчи с эталоном — выбор из двух способов (весь эталон или только разделы): первый
+            c = cond([0, "yes"] if name in ("corrupt_ref", "flaky", "dry") else ["yes"], dry_run=(name == "dry"))
             sim = c.plugin("simulator")
             sim.do_reset()
             if name in ("corrupt_ref", "flaky", "dry"):

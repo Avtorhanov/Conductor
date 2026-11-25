@@ -99,7 +99,7 @@ class GuideTests(Base):
 
     def test_pending_feedback_and_rollback_suggestions(self):
         self.make_reference()
-        c = self.conductor(["later"])                 # «заработало?» — позже
+        c = self.conductor([0, "later"])              # способ — первый; «заработало?» — позже
         c.plugin("simulator").do_corrupt()
         sid = c.run()
         self.assertEqual(c.memory.session(sid)["outcome"], "written_verified")
@@ -379,7 +379,7 @@ class WebServerTests(Base):
         job = self.run_job("run", {"dry_run": True}, [True, "yes"])       # пауза → «эталон?» да
         self.assertEqual(job["result"]["outcome"], "healthy")
         self.run_job("sim", {"do": "corrupt"}, [])
-        job = self.run_job("run", {}, [True, "ДА", "later"])             # пауза → слово → «позже»
+        job = self.run_job("run", {}, [True, 0, "ДА", "later"])          # пауза → способ → слово → «позже»
         sid = job["result"]["session"]
         self.assertEqual(job["result"]["outcome"], "written_verified")
         self.assertEqual(job["next"][0]["action"], "feedback")
@@ -400,7 +400,7 @@ class WebServerTests(Base):
         self.run_job("run", {"dry_run": True}, [True, "yes"])
         self.run_job("sim", {"do": "corrupt"}, [])
         broken = (self.tmp / "data" / "simulator" / "sim" / "flash.bin").read_bytes()
-        job = self.run_job("run", {}, [True, "да, наверное"])
+        job = self.run_job("run", {}, [True, 0, "да, наверное"])
         self.assertEqual(job["result"]["outcome"], "cancelled")
         self.assertEqual((self.tmp / "data" / "simulator" / "sim" / "flash.bin").read_bytes(), broken)
 
@@ -509,6 +509,7 @@ class WizardTests(Base):
             None,       # что дальше → назад
             self.index(g, "sim", "Сбой обновления"),
             1,          # что дальше → «Чинить»
+            0,          # способ → первый (весь эталон)
             "yes",      # заработало
             None,       # что дальше → назад
             None, None,

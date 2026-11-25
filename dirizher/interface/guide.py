@@ -12,12 +12,14 @@ Conductor, со всеми копиями, сверками и подтверж�
 """
 from __future__ import annotations
 
+import json
 import re
 from contextlib import contextmanager
 from pathlib import Path
 
 import yaml
 
+from ..core import layout_detect
 from ..core.params import read_all as param_rows
 from ..core.pipeline import OUTCOMES, Conductor
 from ..core.ui import ConsoleUI
@@ -38,14 +40,16 @@ SNAP_RU = {"before": "копия «до»", "after": "копия «после»"
 #   params — допустимые параметры;
 #   pick   — сеанс выбирается из журнала (какие сеансы подходят — см. pickable()).
 ACTIONS = {
-    "run": {"job": True, "params": {"dry_run", "label", "image"}, "title": "Ремонт"},
-    "detect": {"job": True, "params": set(), "title": "Опознание"},
+    "run": {"job": True, "params": {"dry_run", "label", "image", "target", "adapter"}, "title": "Ремонт"},
+    "detect": {"job": True, "params": {"target", "adapter"}, "title": "Опознание"},
     "rollback": {"job": True, "params": {"dry_run", "session"}, "pick": "rollback", "title": "Откат"},
     "feedback": {"job": True, "params": {"session", "ok"}, "pick": "feedback", "title": "Отзыв"},
     "reference": {"job": True, "params": {"session", "kind", "label"}, "pick": "reference",
                   "title": "Эталон из сеанса"},
     "sim": {"job": True, "params": {"do"}, "title": "Учебная микросхема"},
     "capture": {"job": True, "params": {"scan"}, "title": "Замер сигналов"},
+    # 0.7.0 — журнал загрузки по UART (только приём; baud — число или auto)
+    "uart": {"job": True, "params": {"baud"}, "title": "Журнал загрузки по UART"},
     "export": {"job": False, "params": {"session", "kind"}, "pick": "export", "title": "Дамп файлом"},
     "show": {"job": False, "params": {"session"}, "title": "Сеанс"},
     "history": {"job": False, "params": set(), "title": "Журнал"},
@@ -54,8 +58,8 @@ ACTIONS = {
     "roadmap": {"job": False, "params": set(), "title": "План развития"},
     "builder": {"job": False, "params": {"draft"}, "title": "Конструктор профиля"},
     # 0.4.0 — мастерская
-    "params": {"job": True, "params": set(), "title": "Параметры прибора"},
-    "tune": {"job": True, "params": {"set", "dry_run"}, "title": "Настройка параметров"},
+    "params": {"job": True, "params": {"target", "adapter"}, "title": "Параметры прибора"},
+    "tune": {"job": True, "params": {"set", "dry_run", "target", "adapter"}, "title": "Настройка параметров"},
     "tune_form": {"job": False, "params": {"session"}, "title": "Изменить параметры"},
     "skills": {"job": False, "params": set(), "title": "Навыки"},
     "help": {"job": False, "params": {"article"}, "title": "Справка"},
@@ -66,7 +70,13 @@ ACTIONS = {
     "catalog": {"job": False, "params": {"card", "kind"}, "title": "Справочник"},
     # 0.6.0 — учебная площадка (тренажёр по маршрутам: ноутбук, ТВ, телефон, машина, связки)
     "playground": {"job": False, "params": {"track"}, "title": "Учебная площадка"},
+    # 0.7.0 — настройки инструмента формой (config.tools.yaml через капот)
+    "tool": {"job": False, "params": {"name"}, "title": "Настроить инструмент"},
+    # 0.7.0 — начать с переходника: проверки подключения (card — id карточки переходника)
+    "connect": {"job": False, "params": {"card"}, "title": "Подключить переходник"},
 }
+SELECT_ACTIONS = ("run", "detect", "params", "tune")      # перед ними — выбор переходника и модели
+ID_PARAM = re.compile(r"^[a-z][a-z0-9_]{1,39}$")
 PICK_PURPOSES = ("rollback", "feedback", "reference", "export")
 LESSON_GROUPS = ("work", "dev")
 LEVELS = {"important": 0, "tip": 1, "info": 2}
@@ -131,6 +141,9 @@ def _check_option(opt, where: str, g: dict, errors: list) -> None:
             errors.append(f"{where} «{opt['label']}»: kind — одно из {', '.join(CATALOG_KINDS)}")
         if "track" in params and not isinstance(params["track"], str):
             errors.append(f"{where} «{opt['label']}»: track — id маршрута учебной площадки")
+        for key in ("target", "adapter"):
+            if key in params and not (isinstance(params[key], str) and ID_PARAM.match(params[key])):
+                errors.append(f"{where} «{opt['label']}»: {key} — id (латиница, цифры, _)")
         if "set" in params and not isinstance(params["set"], dict):
             errors.append(f"{where} «{opt['label']}»: set — словарь «параметр: значение»")
 
@@ -233,7 +246,10 @@ def open_readonly(cfg: dict, sim: bool):
 
 def execute(c, action: str, params: dict | None = None):
     """Выполнить действие ядром. Возвращает номер сеанса (или None)."""
-    p = params or {}
+    p = params if params is not None else {}
+    if action in SELECT_ACTIONS and (p.get("adapter") or p.get("target")):
+        from ..workshop import connect
+        connect.prepare(c, p)                # только лезвия переходника, его «Подготовка», модель
     if action == "run":
         return c.run(image_path=p.get("image") or None, label=p.get("label") or None)
     if action == "detect":
@@ -273,6 +289,15 @@ def execute(c, action: str, params: dict | None = None):
             raise ValueError("замер работает только с настоящим логическим анализатором — выключите учебный режим")
         from ..extras import sigrok
         return sigrok.scan(c) if p.get("scan") else sigrok.capture(c, c.cfg)
+    if action == "uart":
+        # Только приём: порт открывается на чтение, в устройство ничего не посылается.
+        if c.sim:
+            raise ValueError("журнал загрузки снимается только с настоящего порта — выключите учебный режим")
+        from ..extras import uart
+        baud = p.get("baud")
+        if baud not in (None, "") and str(baud).strip().lower() != "auto" and not str(baud).strip().isdigit():
+            raise ValueError("скорость — число (например, 115200) или auto")
+        return uart.capture(c, c.cfg, baud=baud)
     raise ValueError(f"действие «{action}» не выполняется ядром")
 
 
@@ -310,6 +335,8 @@ def job_title(action: str, params: dict, dry_run: bool = False) -> str:
         return f"Учебная микросхема: {p.get('do', '')}"
     if action == "capture":
         return "Поиск анализатора" if p.get("scan") else "Замер сигналов"
+    if action == "uart":
+        return "Журнал загрузки по UART" + (" (подбор скорости)" if str(p.get("baud", "")).lower() == "auto" else "")
     if action == "tune":
         return "Настройка параметров" + (" (без записи)" if dry_run else "")
     title = ACTIONS.get(action, {}).get("title", action)
@@ -378,7 +405,23 @@ def session_detail(c, sid: int) -> dict | None:
     snaps = [{"kind": sn["kind"], "kind_ru": SNAP_RU.get(sn["kind"], sn["kind"]), "sha": sn["sha"],
               "size": sn["size"], "verified": bool(sn["verified"]), "ts": _fmt_time(sn["ts"])}
              for sn in c.memory.snapshots(sid)]
-    events = [{"ts": e["ts"][11:19], "level": e["level"], "message": e["message"]} for e in c.memory.events(sid)]
+    rows = c.memory.events(sid)
+    events = [{"ts": e["ts"][11:19], "level": e["level"], "message": e["message"]} for e in rows]
+    regions = []                                  # разделы с отличиями от эталона (карта разделов профиля)
+    auto_layout = None                            # карта, найденная по содержимому (core/layout_detect.py)
+    for e in rows:
+        try:
+            extra = json.loads(e["data"]) if e["data"] else {}
+            regions = extra.get("regions") or regions
+            if extra.get("layout_auto"):
+                found = extra["layout_auto"]
+                auto_layout = {"detector": found.get("detector", ""),
+                               "title": layout_detect.TITLES.get(found.get("detector"), found.get("detector", "")),
+                               "regions": [{"title": r["title"], "span": f"0x{r['offset']:X}…0x{r['end']:X}",
+                                            "preserve": bool(r.get("preserve")), "restore": bool(r.get("restore"))}
+                                           for r in found.get("regions") or []]}
+        except (TypeError, ValueError, AttributeError, KeyError):
+            pass
     actions = []
     kinds = {sn["kind"] for sn in snaps}
     if s["recipe_id"] and s["profile_id"]:
@@ -393,7 +436,8 @@ def session_detail(c, sid: int) -> dict | None:
     if s["profile_id"] and any(sn["verified"] for sn in snaps if sn["kind"] != "written"):
         actions.append({"label": "Сделать эталоном", "action": "reference",
                         "params": {"session": sid, "label": "ask"}})
-    return {"session": info, "snapshots": snaps, "events": events, "actions": actions}
+    return {"session": info, "snapshots": snaps, "events": events, "actions": actions, "regions": regions,
+            "auto_layout": auto_layout}
 
 
 def params_view(c, sid: int | None = None) -> dict | None:
@@ -650,14 +694,23 @@ def after(action: str, params: dict | None, outcome: str | None, sid, sim: bool 
             return [first, _opt("Открыть журнал сеанса", action="show", params={"session": sid}) if sid
                     else _opt("К началу", next="home"), _opt("Как читать замер", lesson="tool_sigrok")]
         return [_opt("Что проверить", lesson="tool_sigrok"), _opt("Попробовать ещё раз", **same)]
+    if action == "uart":
+        if outcome == "captured":
+            return [_opt("Снять ещё раз", **same),
+                    _opt("Открыть журнал сеанса", action="show", params={"session": sid}) if sid
+                    else _opt("К началу", next="home"), _opt("Как читать журнал загрузки", lesson="tool_uart")]
+        return [_opt("Что проверить", lesson="tool_uart"), _opt("Подобрать скорость", action="uart",
+                                                                 params={"baud": "auto"}),
+                _opt("Попробовать ещё раз", **same)]
     if outcome is None:
         return []
     real = dict(p)
     real.pop("dry_run", None)
+    keep = {k: p[k] for k in ("adapter", "target") if p.get(k)}      # выбор переходника и модели
     retry = _opt("Попробовать ещё раз", **same)
     journal = _opt("Открыть журнал сеанса", action="show", params={"session": sid}) if sid else None
     table = {
-        "detected": [_opt("Снять копию и показать план", action="run", params={"dry_run": True}),
+        "detected": [_opt("Снять копию и показать план", action="run", params={"dry_run": True, **keep}),
                      _opt("Снять эталон с исправного устройства", next="backup_good")],
         "not_detected": [_opt("Что проверить", lesson="not_detected"), retry],
         "no_profile": [_opt("Заполнить профиль чипа", action="builder"),
@@ -690,7 +743,7 @@ def after(action: str, params: dict | None, outcome: str | None, sid, sim: bool 
                            action="skills"),
                       _opt("Как устроена карта", action="help", params={"article": "params"})],
         "no_change": [_opt("Изменить другие параметры", action="tune_form", params={"session": sid})],
-        "tuned": [_opt("Прочитать ещё раз", action="params"),
+        "tuned": [_opt("Прочитать ещё раз", action="params", params=keep),
                   _opt("Вернуть прежние настройки", action="rollback", params={"session": sid})],
         "tune_failed": [_opt("Вернуть прежние настройки", "important", action="rollback",
                              params={"session": sid}),

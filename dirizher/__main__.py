@@ -24,6 +24,8 @@ def cmd_plugins(c, a):
         mark = "✔" if row["active"] else "·"
         c.ui.out(f" {mark} {row['name']:<14} {row['title']}")
         c.ui.out(f"      {row['status']}")
+        for t in row.get("warnings") or []:
+            c.ui.warn(f"     {t}")
     if c.sim:
         c.ui.info("(режим --sim: работают только виртуальные плагины)")
 
@@ -38,11 +40,29 @@ def cmd_profiles(c, a):
         c.ui.warn(f"{path}: {err}")
 
 
+def _select(c, a) -> int:
+    """--adapter / --target: только лезвия переходника, его «Подготовка», модель из профиля."""
+    params = {k: getattr(a, k, None) for k in ("adapter", "target") if getattr(a, k, None)}
+    if not params:
+        return 0
+    from .workshop import connect
+    try:
+        connect.prepare(c, params)
+    except ValueError as e:
+        c.ui.error(str(e))
+        return 1
+    return 0
+
+
 def cmd_detect(c, a):
+    if _select(c, a):
+        return 1
     c.detect_only()
 
 
 def cmd_run(c, a):
+    if _select(c, a):
+        return 1
     c.run(image_path=a.image, label=a.label)
 
 
@@ -92,6 +112,8 @@ def cmd_export(c, a):
 
 
 def cmd_params(c, a):
+    if _select(c, a):
+        return 1
     c.read_params()
 
 
@@ -105,6 +127,8 @@ def cmd_tune(c, a):
         changes[key.strip()] = value.strip()
     if not changes:
         c.ui.error("укажите хотя бы одно --set параметр=значение (список — команда params)")
+        return 1
+    if _select(c, a):
         return 1
     c.tune(changes)
 
@@ -135,12 +159,69 @@ def cmd_sim(c, a):
     c.ui.ok(getattr(sim, f"do_{a.action}")())
 
 
+def cmd_journal(c, a):
+    """Пакет журнала для разработки: без дампов, без MAC, серийников, имени хоста и домашних путей."""
+    import json
+
+    from .core import journal
+
+    b = journal.bundle(c, a.session)
+    if b is None:
+        c.ui.error(f"нет сеанса №{a.session}")
+        return 1
+    c.ui.header(f"Журнал для разработки — сеанс №{a.session}")
+    tools = ", ".join(f"{t['plugin']} {t['version'] or '(версия не определена)'}" for t in b["tools"]) or "—"
+    c.ui.info(f"итог: {b['session'].get('outcome') or 'не завершён'}; инструменты: {tools}")
+    c.ui.info(f"команд: {len(b['commands'])}; событий: {len(b['events'])}; дампов в пакете нет")
+    sc = b["scrubbed"]
+    c.ui.info(f"заменено: MAC — {sc['mac']}, серийных — {sc['serial']}, имя хоста — {sc['host']}, "
+              f"домашних путей — {sc['home']}")
+    if not a.to:
+        c.ui.info("чтобы сохранить файл: " + c._cli(f"journal {a.session} --to {journal.filename(a.session, c.sim)}"))
+        return 0
+    dest = Path(a.to)
+    if dest.exists():
+        c.ui.error(f"файл {dest} уже есть — выберите другое имя (чужие файлы не переписываются)")
+        return 1
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with open(dest, "x", encoding="utf-8") as f:
+        json.dump(b, f, ensure_ascii=False, indent=1)
+    c.ui.ok(f"сохранено: {dest}. Передайте файл разработчику; тест из него: python3 tools/log_to_test.py {dest}")
+    return 0
+
+
 COMMANDS = {
     "plugins": cmd_plugins, "profiles": cmd_profiles, "detect": cmd_detect, "run": cmd_run,
     "history": cmd_history, "show": cmd_show, "feedback": cmd_feedback, "reference": cmd_reference,
     "rollback": cmd_rollback, "export": cmd_export, "sim": cmd_sim,
-    "params": cmd_params, "tune": cmd_tune, "skills": cmd_skills,
+    "params": cmd_params, "tune": cmd_tune, "skills": cmd_skills, "journal": cmd_journal,
 }
+
+
+def _target_args(sp) -> None:
+    sp.add_argument("--adapter", help="переходник (id карточки): опрашиваются только его лезвия, "
+                                      "подготовка — по нему; модель спросится списком")
+    sp.add_argument("--target", help="модель (id профиля, например stm32f103c8): настройки лезвия — из профиля")
+
+
+def cmd_connect(cfg, adapter_id) -> int:
+    from .interface.guide import open_readonly
+    from .workshop import connect
+    ui = ConsoleUI()
+    with open_readonly(cfg, False) as c:
+        try:
+            v = connect.view(cfg, adapter_id, c.plugin_report, profiles=c.profiles)
+        except ValueError as e:
+            ui.error(str(e))
+            return 1
+    ui.header("Подключить инструмент: " + (v["card"]["title"] if adapter_id else "выберите переходник"))
+    for line in connect.text(v):
+        ui.out(line)
+    if adapter_id:
+        ui.info(f"проверить подключение: python3 -m dirizher detect --adapter {adapter_id}")
+    else:
+        ui.info("проверки переходника: python3 -m dirizher connect <id>")
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -157,19 +238,31 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("wizard", help="пошаговый мастер в терминале (SSH, консоль, маленький экран)")
 
     sub.add_parser("plugins", help="какие инструменты подключены")
+    tl = sub.add_parser("tool", help="настройки инструмента (лезвия): посмотреть, включить, изменить")
+    tl.add_argument("name", nargs="?", help="имя лезвия (без имени — список)")
+    tl.add_argument("--set", action="append", metavar="ключ=значение", help="новое значение (можно несколько)")
+    tl.add_argument("--check", action="store_true", help="только проверить, ничего не записывать")
     sub.add_parser("profiles", help="какие профили загружены")
-    sub.add_parser("detect", help="только опознать, что подключено")
+    cn = sub.add_parser("connect", help="начать с переходника: проверки подключения (без id — список)")
+    cn.add_argument("adapter", nargs="?", help="id карточки переходника, например st_link_v2")
+    de = sub.add_parser("detect", help="только опознать, что подключено")
 
     r = sub.add_parser("run", help="полный цикл: опознание → копия → диагностика → ремонт")
     r.add_argument("--dry-run", action="store_true", help="показать план, ничего не записывая")
     r.add_argument("--image", help="официальный образ прошивки для записи")
     r.add_argument("--label", help="метка эталона (например, модель платы)")
+    for sp in (de, r):
+        _target_args(sp)
 
     h = sub.add_parser("history", help="история сеансов")
     h.add_argument("-n", type=int, default=20, help="сколько последних показать")
 
     s = sub.add_parser("show", help="подробности сеанса")
     s.add_argument("session", type=int)
+
+    jr = sub.add_parser("journal", help="журнал сеанса для разработки (без дампов и личных данных)")
+    jr.add_argument("session", type=int)
+    jr.add_argument("--to", help="сохранить в файл .json")
 
     f = sub.add_parser("feedback", help="отзыв после проверки устройства (обучение)")
     f.add_argument("session", type=int)
@@ -191,10 +284,11 @@ def build_parser() -> argparse.ArgumentParser:
     ex.add_argument("--kind", default="before", choices=["before", "after", "written"])
     ex.add_argument("--to", required=True, help="куда сохранить, например ~/dump.bin")
 
-    sub.add_parser("params", help="прочитать параметры прибора по карте профиля (только чтение)")
+    _target_args(sub.add_parser("params", help="прочитать параметры прибора по карте профиля (только чтение)"))
     tu = sub.add_parser("tune", help="изменить параметры прибора: копия «до», план, запись после «ДА»")
     tu.add_argument("--set", action="append", metavar="ПАРАМЕТР=ЗНАЧЕНИЕ", help="например range_high=600")
     tu.add_argument("--dry-run", action="store_true", help="показать план, ничего не записывая")
+    _target_args(tu)
     sub.add_parser("skills", help="навыки: что загружено и что сломано")
     dr = sub.add_parser("doctor", help="самопроверка: копии, память, профили, навыки, Штурман")
     dr.add_argument("--heal", action="store_true", help="исправить то, что исправляется без догадок")
@@ -308,8 +402,13 @@ def main(argv=None) -> int:
         return cmd_help(cfg, args.words)
     if args.cmd == "catalog":
         return cmd_catalog(cfg, args.card, args.kind)
+    if args.cmd == "connect":
+        return cmd_connect(cfg, args.adapter)
     if args.cmd == "playground":
         return cmd_playground(args.track, args.export)
+    if args.cmd == "tool":
+        from .workshop import toolsettings
+        return toolsettings.cli(cfg, args.name, args.set or [], args.check, ConsoleUI())
     ui = ConsoleUI()
     c = Conductor(cfg, ui, sim=args.sim, dry_run=getattr(args, "dry_run", False))
     try:

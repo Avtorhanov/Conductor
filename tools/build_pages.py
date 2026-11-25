@@ -244,7 +244,7 @@ class Recorder:
         """Журнал для демо: эталон с исправной → поломка → ремонт → параметры."""
         shutil.rmtree(self.data, ignore_errors=True)
         plan = [("sim", {"do": "reset"}, []), ("run", {}, ["ok", "yes"]), ("sim", {"do": "corrupt"}, []),
-                ("run", {"dry_run": True}, ["ok"]), ("run", {}, ["ok", "ok", "yes"]), ("params", {}, [])]
+                ("run", {"dry_run": True}, ["ok", "0"]), ("run", {}, ["ok", "0", "ok", "yes"]), ("params", {}, [])]
         for action, params, answers in plan:
             self.run_once(action, params, answers)
         hist = self.req("GET", "/api/history?n=100&sim=1")
@@ -269,12 +269,22 @@ class Recorder:
         for it in items:
             if it["kind"] == "article":
                 articles[it["id"]] = self.req("GET", f"/api/help/article?id={it['id']}")
+        tools = {}
+        for pl in self.req("GET", "/api/device?sim=1").get("plugins", []):
+            if pl.get("title") == "ошибка загрузки":
+                continue
+            try:  # настройки лезвий — только просмотр; «Проверить» и «Сохранить» в демо идут на прибор
+                tools[pl["name"]] = self.req("GET", f"/api/tool?name={pl['name']}")
+            except RuntimeError:
+                pass
         hello = self.req("GET", "/api/hello")
         hello.update({"authed": True, "local": False, "demo": True, "demo_text": DEMO_TEXT, "sim_default": True,
                       "connect": {"urls": [], "pin": None, "need_pin": False}})
         return {"version": __version__, "hello": hello, "guide": self.req("GET", "/api/guide"),
                 "roadmap": self.req("GET", "/api/roadmap"), "catalog": cat, "cards": cards,
-                "help_items": self.clean(items), "articles": articles,
+                # список переходников; сами проверки (USB, группы, программы) — только на приборе
+                "connect": self.req("GET", "/api/connect?sim=1"),
+                "help_items": self.clean(items), "articles": articles, "tools": tools,
                 "builder_fields": self.req("GET", "/api/builder/fields"),
                 "builder_drafts": self.req("GET", "/api/builder/drafts")}
 

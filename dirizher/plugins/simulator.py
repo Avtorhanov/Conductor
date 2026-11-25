@@ -14,6 +14,7 @@ import os
 import random
 import zlib
 
+from .. import __version__
 from ..core.models import Detection
 from ..core.plugin import Plugin
 
@@ -23,6 +24,8 @@ class SimulatorPlugin(Plugin):
     title = "Симулятор: виртуальная SPI-флешка W25Q64 (8 МБ)"
     target_class = "memory.spi_nor"
     hardware = False
+    common_settings = ("enabled",)
+    settings_schema: list = []        # своих настроек нет
 
     SIZE = 8 * 1024 * 1024
     JEDEC = "EF4017"
@@ -63,6 +66,9 @@ class SimulatorPlugin(Plugin):
     # ---------- интерфейс плагина ----------
     def available(self) -> tuple:
         return True, "виртуальное устройство (железо не используется)"
+
+    def version(self):
+        return f"встроенный {__version__}"
 
     def probe(self):
         self._ensure()

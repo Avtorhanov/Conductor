@@ -11,20 +11,25 @@
 """
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 
-from .checks import CHECKS, DEFAULT_CHECKS, CheckInput, diff_sectors, is_fill
+from .checks import CHECKS, DEFAULT_CHECKS, CheckInput, diff_sectors, is_fill, masked, region_diff
+from . import layout as layout_mod
+from . import layout_detect
 from .learning import Learning
 from .memory import Memory, now
-from .models import Finding, chip_key
+from .models import Finding, Inspection, chip_key
 from .params import apply_changes, read_all as param_rows
 from .profiles import ProfileDB, to_int
 from .registry import load_plugins
+from . import journal
 from .runner import Runner
 from .safety import Safety
 from .skills import SkillDB
 from .storage import BackupStore, sha256
+from . import target as target_mod
 
 STEPS = 7
 
@@ -93,18 +98,89 @@ class Conductor:
         self.profiles = ProfileDB(cfg["profiles_dir"], self.skills.profile_dirs())
         self.safety = Safety(cfg["safety"])
         self.learning = Learning(self)
-        self.runner = Runner(self.log)
+        self.runner = Runner(self.log, self._keep_output)
+        self._versions = set()           # (сеанс, лезвие): версия уже записана
+        self.target = None               # профиль модели, выбранный человеком (select)
+        self.inspected = []              # находки Plugin.inspect текущего сеанса
+        self._measured = {}              # лезвие → замеренное напряжение цели, В (текущий сеанс)
+        self.only = None                 # опрашивать только эти лезвия (выбран переходник)
+        self.preflight = None            # строки «Подготовки» из карточки переходника
         self.plugins, self.plugin_report = load_plugins(self, cfg, sim, self.skills.active)
         for path, err in self.profiles.errors:
             ui.warn(f"профиль {Path(path).name} пропущен: {err}")
+
+    def select(self, target: str | None = None, plugins=None, preflight=None, source: str = "") -> None:
+        """Выбор перед сеансом: модель (id профиля) и/или лезвия переходника. Только настройки — железо
+        не опрашивается (кроме available()).
+
+        target — настройки лезвий берутся ещё и из profile.tool (core/target.py): config.yaml <
+        config.tools.yaml < профиль. plugins — опрашивать только эти лезвия (source — чьи: название
+        переходника). preflight — строки шага «Подготовка» (из карточки переходника)."""
+        from .registry import discover
+        overlay = None
+        if target:
+            prof = self.profiles.get(target)
+            if prof is None:
+                raise ValueError(f"нет профиля «{target}» — список: python3 -m dirizher profiles")
+            classes, _ = discover(self.skills.active)
+            errors = target_mod.check(prof, classes)
+            if errors:
+                raise ValueError(f"в профиле «{target}» ошибки в поле tool: " + "; ".join(errors))
+            overlay = target_mod.overlay(prof, classes)
+            self.target = prof
+        self.only = list(plugins) if plugins is not None else None
+        self.preflight = list(preflight) if preflight else None
+        why = f"выбран переходник «{source}»" if source else "выбран другой инструмент"
+        self.plugins, self.plugin_report = load_plugins(self, self.cfg, self.sim, self.skills.active,
+                                                        overlay=overlay, only=self.only, only_why=why)
+
+    def _selection_note(self) -> None:
+        """В журнал и человеку — что выбрано перед сеансом."""
+        if self.only is not None:
+            names = ", ".join(self.only) or "—"
+            self.log(f"опрашиваются только лезвия переходника: {names}", data={"only": self.only})
+            if not self.plugins:
+                self.ui.warn(f"у выбранного переходника нет готовых лезвий ({names}): "
+                             f"«Прибор» → «Инструменты» → включить и настроить")
+        if self.target is not None:
+            self.log(f"модель выбрана человеком: {self.target.id}", data={"target": self.target.id})
 
     # ================= служебное =================
     def log(self, message: str, level: str = "info", data: dict | None = None) -> None:
         if self.session is not None:
             self.memory.log(self.session, level, message, data)
 
+    def _keep_output(self, res, keep_output: bool = True) -> dict:
+        """Полный вывод команды — отдельным файлом рядом с журналом сеанса (для разработки).
+
+        Дампы сюда не попадают: плагины читают чип во временные файлы, а вывод с данными
+        чипа помечают keep_output=False. Файлы только добавляются, ничего не переписывается.
+        """
+        if self.session is None:
+            return {}
+        rel = journal.save_command(self.memory.logs_dir, self.session, res, keep_output)
+        return {"file": rel}
+
+    def _log_version(self, plugin) -> None:
+        """Версия программы-движка — один раз за сеанс, только в журнал (не в отпечаток)."""
+        key = (self.session, plugin.name)
+        if self.session is None or key in self._versions:
+            return
+        self._versions.add(key)
+        try:
+            ver = plugin.version()
+        except Exception as e:                       # версия — сведение, сеанс не роняет
+            ver, err = None, str(e)
+        else:
+            err = None
+        text = f"версия {ver}" if ver else "версия не определена"
+        self.log(f"инструмент: {plugin.title} ({plugin.name}), {text}",
+                 data={"tool": plugin.name, "version": ver, "settings": dict(plugin.settings or {}),
+                       **({"error": err} if err else {})})
+
     def _start(self, kind: str, parent: int | None = None) -> int:
         self.session = self.memory.start_session(kind, parent)
+        self.inspected, self._measured = [], {}
         mode = (" — пробный режим" if self.dry_run else "") + (" — симулятор" if self.sim else "")
         self.log(f"начат сеанс «{kind}»{mode}")
         return self.session
@@ -175,9 +251,49 @@ class Conductor:
         return best
 
     def _record_detection(self, det) -> None:
+        if self.target is not None:
+            self.ui.info(f"модель выбрана вами: {self.target.name} — по проводам её не узнать, "
+                         f"выбор проверьте по маркировке чипа")
+            if det.profile is not None and det.profile.id != self.target.id \
+                    and det.profile.target_class == self.target.target_class:
+                self.ui.warn(f"по отпечатку подошёл другой профиль: {det.profile.name}")
         self.memory.update_session(self.session, plugin=det.plugin, target_class=det.target_class,
                                    fingerprint=det.fingerprint,
                                    profile_id=det.profile.id if det.profile else None)
+        try:
+            self._log_version(self.plugin(det.plugin))
+        except KeyError:
+            pass
+
+    def inspect(self, plugin, det) -> list:
+        """Plugin.inspect: что ещё программа узнаёт только чтением (защита, фьюзы, ID, замер напряжения).
+
+        Находки показываются и пишутся в журнал; «block» потом запрещает запись (write_blockers).
+        Замер напряжения запоминается для шага «Напряжение». Ошибка здесь сеанс не роняет."""
+        try:
+            res = plugin.inspect(det)
+        except Exception as e:                       # сведения — дополнение, сеанс продолжается
+            self.log(f"{plugin.name}: дополнительная проверка не удалась: {e}", "error")
+            res = [Finding("inspect", "info", f"дополнительные сведения от программы не получены: {e}")]
+        if res is None:
+            res = Inspection()
+        elif isinstance(res, (list, tuple)):
+            res = Inspection(findings=list(res))
+        found = [f for f in res.findings if isinstance(f, Finding)]
+        for f in found:
+            self.ui.finding(f)
+            self.log(f"[{f.status}] {f.check}: {f.message}", data={"inspect": plugin.name})
+        if res.measured_voltage is not None:
+            try:
+                volts = float(res.measured_voltage)
+            except (TypeError, ValueError):
+                self.log(f"{plugin.name}: замер напряжения не разобран: {res.measured_voltage!r}", "error")
+            else:
+                self._measured[plugin.name] = volts
+                self.log(f"замер напряжения цели: {volts:.3f} В ({plugin.title})",
+                         data={"measured_voltage": volts, "tool": plugin.name})
+        self.inspected = found
+        return found
 
     def adapter_voltage(self, plugin=None) -> float:
         """Напряжение адаптера: своё у плагина (programmer_voltage в его настройках) или общее."""
@@ -193,14 +309,27 @@ class Conductor:
         pv = self.adapter_voltage(plugin)
         status, msg = self.safety.voltage_check(profile, pv)
         self.log(f"напряжение: {status}: {msg}")
-        if status == "block":
+        if status == "block":                        # прежний запрет — всегда запрет, замер его не снимает
             self.ui.error(msg)
             return False
+        # Замер (Plugin.inspect) только добавляет: может остановить, но не отменяет вопрос и запрет выше.
+        measured = self._measured.get(plugin.name) if plugin is not None else None
+        m_msg = None
+        if measured is not None:
+            m_status, m_msg = self.safety.measured_check(profile, pv, measured)
+            self.log(f"замер напряжения: {m_status}: {m_msg}", data={"measured_voltage": measured})
+            if m_status == "block":
+                self.ui.error(m_msg)
+                return False
         if status == "warn":
             self.ui.warn(msg)
             answer = self.ui.yes_no(f"Вы проверили по даташиту, что чип рассчитан на {pv} В?")
-            return answer == "yes"
-        self.ui.ok(msg)
+            if answer != "yes":
+                return False
+        else:
+            self.ui.ok(msg)
+        if m_msg:
+            self.ui.ok(m_msg)
         return True
 
     def backup(self, plugin, det, kind: str = "before") -> tuple:
@@ -262,9 +391,87 @@ class Conductor:
         return {"data": self.store.get(chosen["sha"]), "label": chosen["label"],
                 "sha": chosen["sha"], "profile_id": chosen["profile_id"], "preserve": preserve}
 
+    def auto_layout(self, det, data: bytes) -> list:
+        """Карта разделов по содержимому копии «до» (core/layout_detect.py), если в профиле её нет.
+
+        Находка: «ok» — разметка найдена и подставлена в профиль этого сеанса (preserve дополняется);
+        «fail» — подпись есть, а таблица испорчена (разделы не определены, работа как без карты).
+        Профиль в базе не меняется: сеанс получает копию с картой."""
+        prof = det.profile
+        if prof is None or prof.layout or not prof.layout_auto:
+            return []
+        res = layout_detect.detect(data, prof.layout_auto, prof.size or len(data))
+        if res is None:
+            return []
+        if not res.ok:
+            f = Finding("layout_auto", "fail",
+                        f"{res.title}: подпись есть, но разметка испорчена — " + "; ".join(res.problems)
+                        + ". Разделы не определены, работаю без карты.",
+                        ["restore_reference", "restore_image"])
+            self.ui.finding(f)
+            self.log(f"[{f.status}] {f.check}: {f.message}")
+            return [f]
+        preserve = list(prof.preserve)
+        have = {(to_int(r["offset"]), to_int(r["length"])) for r in preserve}
+        for reg in layout_mod.preserve_regions(res.rows):
+            if (reg["offset"], reg["length"]) not in have:
+                preserve.append(reg)
+        det.profile = dataclasses.replace(prof, layout=res.rows, preserve=preserve)
+        self._auto = (prof, res)                     # для сверки с эталоном (auto_layout_reference)
+        kept = [r["title"] for r in res.rows if r["preserve"]]
+        msg = (f"разметка по содержимому ({res.title}): разделов {len(res.rows)} — "
+               + ", ".join(f"«{r['title']}»" for r in res.rows)
+               + (f". Сохраняются с чипа: {', '.join(kept)}" if kept else "")
+               + "".join(f". {n[0].upper()}{n[1:]}" for n in res.notes))
+        f = Finding("layout_auto", "ok", msg)
+        self.ui.finding(f)
+        self.log(f"[{f.status}] {f.check}: {f.message}",
+                 data={"layout_auto": {"detector": res.detector, "regions": [
+                     {k: r[k] for k in ("id", "title", "kind", "offset", "end", "preserve", "restore")}
+                     for r in res.rows]}})
+        return [f]
+
+    def auto_layout_reference(self, det, ref) -> list:
+        """Карта взята из чипа (layout_auto), а чип может быть испорчен: у дескриптора Intel контрольной суммы нет.
+        Есть эталон — тот же определитель разбирает и его. Совпало (те же разделы и границы) — всё как было.
+        Не совпало или в эталоне не найдено — находка «warn»: карты в сеансе нет (restore_regions не предлагается,
+        полная запись эталона остаётся), уникальные области — по разметке эталона, если она есть, иначе — с чипа."""
+        auto, self._auto = getattr(self, "_auto", None), None
+        if auto is None or ref is None:
+            return []
+        base, res = auto
+        theirs = layout_detect.detect(ref["data"], [res.detector], base.size or len(ref["data"]))
+        key = lambda rows: [(r["id"], r["offset"], r["end"]) for r in rows]
+        if theirs is not None and theirs.ok and key(theirs.rows) == key(res.rows):
+            return []
+        chip_preserve = layout_mod.preserve_regions(res.rows)
+        source = theirs.rows if theirs is not None and theirs.ok else res.rows
+        extra = layout_mod.preserve_regions(source)
+        preserve = list(base.preserve) + [r for r in extra if r not in base.preserve]
+        det.profile = dataclasses.replace(det.profile, layout=[], preserve=preserve)
+        ref["preserve"] = ([r for r in ref["preserve"] if r not in chip_preserve]
+                           + [r for r in extra if r not in ref["preserve"]])
+        if theirs is None or not theirs.ok:
+            why = f"в эталоне {res.title} не найден" if theirs is None else f"в эталоне {res.title} испорчен"
+            keep = "уникальные области — по разметке чипа"
+        else:
+            diff = sorted({r["title"] for r in theirs.rows if (r["id"], r["offset"], r["end"]) not in key(res.rows)}
+                          | {r["title"] for r in res.rows if (r["id"], r["offset"], r["end"]) not in key(theirs.rows)})
+            why = "отличаются: " + ", ".join(f"«{t}»" for t in diff)
+            keep = "уникальные области — по разметке эталона"
+        f = Finding("layout_auto", "warn",
+                    f"разметка на чипе и в эталоне различается ({why}) — частичное восстановление не предлагаю; "
+                    f"{keep}. Возможно, испорчена сама таблица на чипе.")
+        self.ui.finding(f)
+        self.log(f"[{f.status}] {f.check}: {f.message}")
+        return [f]
+
     def diagnose(self, det, data: bytes, verified: bool, ref) -> list:
         findings = []
-        for spec in det.profile.check_specs(DEFAULT_CHECKS):
+        specs = det.profile.check_specs(DEFAULT_CHECKS)
+        if det.profile.layout and not any(sp.get("type") == "layout" for sp in specs):
+            specs.append({"type": "layout"})        # есть карта разделов — проверка по ней всегда
+        for spec in specs:
             name = str(spec.get("type"))
             fn = CHECKS.get(name)
             if fn is None:
@@ -277,6 +484,12 @@ class Conductor:
             findings.append(f)
             self.ui.finding(f)
             self.log(f"[{f.status}] {f.check}: {f.message}")
+        if det.profile.layout and ref is not None:
+            rows = region_diff(CheckInput(data, verified, det.profile, ref, {}, self))
+            if rows:                                # для подробностей сеанса (веб, мастер)
+                self.log("разделы с отличиями от эталона: " + layout_mod.describe(rows),
+                         data={"regions": [{k: r[k] for k in ("id", "title", "kind", "sectors", "restore")}
+                                           for r in rows]})
         return findings
 
     def plan(self, det, findings: list, ref, image_path) -> tuple:
@@ -292,8 +505,11 @@ class Conductor:
             r = det.profile.recipe(rid)
             if r is None:
                 continue
-            if r["action"] == "write_reference" and ref is None:
+            if r["action"] in ("write_reference", "write_reference_regions") and ref is None:
                 hints.append("восстановить из эталона нельзя — эталона для этого устройства ещё нет")
+                continue
+            if r["action"] == "write_reference_regions" and not det.profile.layout:
+                hints.append("восстановить по разделам нельзя — карта разделов не определилась")
                 continue
             if r["action"] == "write_image" and not image_path:
                 hints.append("можно записать официальный образ: запустите с --image путь/к/файлу.bin")
@@ -308,6 +524,8 @@ class Conductor:
             if ref is None:
                 raise ValueError("эталона нет")
             image, source, preserve = bytearray(ref["data"]), f"эталон «{ref['label']}»", ref["preserve"]
+        elif action == "write_reference_regions":
+            return self._build_regions(det, current, ref)
         elif action == "write_image":
             path = Path(image_path).expanduser()
             if not path.is_file():
@@ -329,6 +547,35 @@ class Conductor:
             else:
                 image[off:off + ln] = cur
                 notes.append(f"сохраняю с текущего чипа: {why} (0x{off:X}+0x{ln:X})")
+        return bytes(image), source, notes, warnings
+
+    def _build_regions(self, det, current: bytes, ref) -> tuple:
+        """Частичное восстановление: текущий чип, а отличающиеся разделы restore: true — из эталона.
+        Уникальное (preserve), настройки и место вне карты остаются с чипа."""
+        if ref is None:
+            raise ValueError("эталона нет")
+        if not det.profile.layout:
+            raise ValueError("в профиле нет карты разделов layout")
+        preserve = ref["preserve"]
+        # отличия считаются без уникальных областей: они остаются с чипа в любом случае
+        _, taken, left = layout_mod.build(masked(current, preserve), masked(ref["data"], preserve),
+                                          det.profile.layout)
+        image = bytearray(current)
+        for row in taken:
+            image[row["offset"]:row["end"]] = ref["data"][row["offset"]:row["end"]]
+        for reg in preserve:                        # старое поле preserve внутри раздела — тоже с чипа
+            off, ln = to_int(reg["offset"]), to_int(reg["length"])
+            image[off:off + ln] = current[off:off + ln]
+        notes = [f"беру из эталона: «{r['title']}» ({layout_mod.span(r)}), отличалось "
+                 f"{layout_mod.sectors_text(r['sectors'])}" for r in taken]
+        warnings = [(f"не трогаю «{r['title']}» (отличается {layout_mod.sectors_text(r['sectors'])}): "
+                     "раздел не берётся из эталона (restore: false)") if r["id"] else
+                    (f"не трогаю место вне карты разделов (отличается {layout_mod.sectors_text(r['sectors'])}): "
+                     "оно не описано в профиле") for r in left]
+        if not taken:
+            notes.append("отличий в восстанавливаемых разделах нет")
+        source = (f"разделы из эталона «{ref['label']}»: " + ", ".join(f"«{r['title']}»" for r in taken)
+                  if taken else f"эталон «{ref['label']}» (разделы не отличаются)")
         return bytes(image), source, notes, warnings
 
     def apply(self, plugin, det, image: bytes, source: str) -> bool:
@@ -360,15 +607,30 @@ class Conductor:
         self.log(f"сверка: {'совпало' if ok else 'НЕ совпало'}; снимок «после» {sha_after[:16]}…")
         return ok
 
+    def preflight_lines(self) -> list:
+        """Строки «Подготовки»: из карточки переходника, иначе — общие у всех активных лезвий
+        (Plugin.preflight), иначе — общий текст ядра (PREFLIGHT, про прищепку SPI-флешки)."""
+        if self.preflight:
+            return list(self.preflight)
+        own = {tuple(p.preflight) if p.preflight else None for p in self.plugins}
+        if len(own) == 1:
+            only = next(iter(own))
+            if only:
+                return list(only)
+        return list(PREFLIGHT)
+
     # ================= сценарии =================
-    def run(self, image_path: str | None = None, label: str | None = None) -> int:
+    def run(self, image_path: str | None = None, label: str | None = None, target: str | None = None) -> int:
+        if target:
+            self.select(target=target, plugins=self.only, preflight=self.preflight)
         ui = self.ui
         sid = self._start("run")
         ui.header(f"Сеанс №{sid}" + (" — ПРОБНЫЙ РЕЖИМ, запись отключена" if self.dry_run else "")
                   + (" — симулятор" if self.sim else ""))
 
         ui.step(1, STEPS, "Подготовка: безопасность прежде всего")
-        for line in PREFLIGHT:
+        self._selection_note()
+        for line in self.preflight_lines():
             ui.info("• " + line.format(pv=self.safety.programmer_voltage))
         ui.pause("Проверили? Нажмите Enter…")
 
@@ -394,6 +656,7 @@ class Conductor:
             ui.info(f"черновик точного профиля (для обучения): {draft}")
         else:
             ui.ok(f"профиль: {det.profile.name}")
+        inspected = self.inspect(plugin, det)
 
         ui.step(3, STEPS, "Совместимость по напряжению")
         if not self._voltage_gate(det.profile, plugin):
@@ -418,8 +681,12 @@ class Conductor:
                 return self._finish("blocked_voltage")
 
         ui.step(5, STEPS, "Диагностика")
+        self._auto = None
+        auto = self.auto_layout(det, data)       # до эталона: preserve из найденной карты нужен и ему
         ref = self.find_reference(det, label)
-        findings = self.diagnose(det, data, verified, ref)
+        auto += self.auto_layout_reference(det, ref)
+        diag = auto + self.diagnose(det, data, verified, ref)
+        findings = inspected + diag            # находки inspect — как диагностика: «block» запрещает запись
 
         ui.step(6, STEPS, "План ремонта")
         ranked, hints = self.plan(det, findings, ref, image_path)
@@ -429,7 +696,8 @@ class Conductor:
             if any(f.status == "block" for f in findings):
                 ui.error("есть блокирующие проблемы — устраните их и запустите снова")
                 return self._finish("blocked")
-            if any(f.status in ("warn", "fail") for f in findings):
+            # замечания inspect (защита записи, шифрование…) — сведения об устройстве, а не о прошивке
+            if any(f.status in ("warn", "fail") for f in diag):
                 ui.warn("есть замечания, но подходящего способа ремонта сейчас нет")
                 return self._finish("no_action")
             ui.ok("неисправностей в прошивке не найдено")
@@ -503,6 +771,7 @@ class Conductor:
                                       "исправное устройство")
             self.log(f"сохранён эталон «{lbl}»: {sha[:16]}…")
             self.ui.ok(f"эталон «{lbl}» сохранён — с ним будут сравниваться такие же устройства")
+            self._board_draft(det.profile, det.target_class, sha)
         elif answer == "later":
             self.ui.info(f"сохранить позже: {self._cli(f'reference {self.session} --kind before')}")
 
@@ -533,6 +802,7 @@ class Conductor:
                     self.memory.add_reference(s["profile_id"], s["profile_id"], key, after["sha"],
                                               after["size"], sid, "после успешного ремонта")
                     self.ui.ok("эталон сохранён")
+                    self._board_draft(prof, s["target_class"], after["sha"])
         else:
             self.ui.warn("записал неудачу — этот способ теперь будет ниже в списке")
             self.ui.info(f"вернуть копию «до»: {self._cli(f'rollback {sid}')}")
@@ -564,6 +834,7 @@ class Conductor:
             ui.info(f"сейчас: {now_fp}")
             return self._finish("blocked")
         plugin = self.plugin(det.plugin)
+        inspected = self.inspect(plugin, det)
 
         ui.step(2, 5, "Совместимость по напряжению")
         if det.profile is None or not self._voltage_gate(det.profile, plugin):
@@ -576,7 +847,7 @@ class Conductor:
             return self._finish("already_same")
 
         ui.step(4, 5, "Проверка условий записи")
-        blockers = self.safety.write_blockers(verified=verified, findings=[], profile=None,
+        blockers = self.safety.write_blockers(verified=verified, findings=inspected, profile=None,
                                               image=data_before, chip_size=len(data), dry_run=self.dry_run)
         if blockers:
             for b in blockers:
@@ -598,6 +869,7 @@ class Conductor:
 
         Возвращает (плагин, опознание, None) или (None, None, итог остановки)."""
         ui = self.ui
+        self._selection_note()
         ui.step(first_step, total, "Опознание (только чтение идентификаторов)")
         det = self.detect()
         if det is None:
@@ -619,6 +891,7 @@ class Conductor:
             return None, None, "no_params"
         if det.profile is not None:
             ui.ok(f"профиль: {det.profile.name}")
+        self.inspect(plugin, det)
         ui.step(first_step + 1, total, "Совместимость по напряжению")
         if not self._voltage_gate(det.profile, plugin):
             return None, None, "blocked_voltage"
@@ -643,8 +916,10 @@ class Conductor:
         for row in param_rows(data, profile.params):
             self.ui.info(f"{row['title']}: {row['text']}" + ("" if row["writable"] else "  (только чтение)"))
 
-    def read_params(self) -> int:
+    def read_params(self, target: str | None = None) -> int:
         """Прочитать параметры прибора и показать их. Только чтение."""
+        if target:
+            self.select(target=target, plugins=self.only, preflight=self.preflight)
         ui = self.ui
         sid = self._start("params")
         ui.header(f"Сеанс №{sid}: параметры прибора (только чтение)" + (" — симулятор" if self.sim else ""))
@@ -666,10 +941,12 @@ class Conductor:
             ui.warn("повторные чтения не совпали — значения могут быть неточными, запись будет заблокирована")
         return self._finish("params_read")
 
-    def tune(self, changes: dict) -> int:
+    def tune(self, changes: dict, target: str | None = None) -> int:
         """Изменить параметры прибора: копия «до» → план «было → стало» → «ДА» → запись и сверка."""
         if not changes:
             raise ValueError("не задано ни одного нового значения")
+        if target:
+            self.select(target=target, plugins=self.only, preflight=self.preflight)
         ui = self.ui
         total = 6
         sid = self._start("tune")
@@ -711,7 +988,7 @@ class Conductor:
             return self._finish("no_change")
         for line in lines:
             ui.info("• " + line)
-        blockers = self.safety.write_blockers(verified=verified, findings=[], profile=det.profile,
+        blockers = self.safety.write_blockers(verified=verified, findings=self.inspected, profile=det.profile,
                                               image=image, chip_size=len(data), dry_run=self.dry_run)
         if blockers:
             only_dry = self.dry_run and len(blockers) == 1
@@ -737,9 +1014,12 @@ class Conductor:
         self.show_params(det.profile, image)
         return self._finish("tuned")
 
-    def detect_only(self) -> int:
+    def detect_only(self, target: str | None = None) -> int:
+        if target:
+            self.select(target=target, plugins=self.only, preflight=self.preflight)
         self._start("detect")
         self.ui.header(f"Сеанс №{self.session}: опознание (только чтение)")
+        self._selection_note()
         det = self.detect()
         if det is None:
             self.ui.error("ничего не опознано")
@@ -775,6 +1055,20 @@ class Conductor:
         self.memory.add_reference(s["profile_id"], lbl, chip_key(s["target_class"], fp), snap["sha"],
                                   snap["size"], sid, f"вручную из снимка «{snap['kind']}»")
         self.ui.ok(f"эталон «{lbl}» сохранён из снимка «{snap['kind']}» сеанса №{sid}")
+        self._board_draft(self.profiles.get(s["profile_id"]), s["target_class"], snap["sha"])
+
+    def _board_draft(self, profile, target_class: str, sha: str) -> None:
+        """После сохранения эталона: черновик профиля ПЛАТЫ в data/drafts/ (подпись, разметка, binwalk).
+        Ошибка черновика не мешает эталону — он уже сохранён."""
+        if profile is None or profile.content_match:
+            return                                  # плата уже узнаётся своим профилем
+        try:
+            path = self.learning.record_board(profile, target_class, self.store.get(sha), sha)
+        except Exception as e:
+            self.log(f"черновик профиля платы не создан: {e}", "warn")
+            return
+        if path is not None:
+            self.ui.info(f"черновик профиля платы (проверьте и перенесите в profiles/boards/): {path}")
 
     def export(self, sid: int, kind: str, dest: str) -> None:
         snap = self.memory.snapshot(sid, kind)

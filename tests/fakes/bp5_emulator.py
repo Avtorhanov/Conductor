@@ -38,6 +38,7 @@ class BP5Emulator:
         self.wp = False
         self.present = True
         self.pointer = 0
+        self.vout = None             # замер на VOUT (None — как задано командой W)
         self.pending = []            # ожидаемые ответы на вопросы меню
         self.lines: list = []        # все принятые команды
         self.master, self.slave = pty.openpty()
@@ -118,7 +119,8 @@ class BP5Emulator:
             return "\nMode: I2C\n" + self.prompt()
         if kind == "current":
             self.psu = True
-            return (f"\nVreg output: {self._volts:.1f}V, Vref/Vout pin: {self._volts:.1f}V\n"
+            vout = self._volts if self.vout is None else self.vout
+            return (f"\nVreg output: {self._volts:.1f}V, Vref/Vout pin: {vout:.1f}V\n"
                     "Current: 2.1mA\nPower supply: Enabled\n" + self.prompt())
         return self.prompt()
 

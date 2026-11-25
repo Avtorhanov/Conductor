@@ -45,3 +45,17 @@ class Finding:
     status: str                                   # ok | info | warn | fail | block
     message: str
     suggest: list = field(default_factory=list)   # id рецептов, которые могут помочь
+
+
+@dataclass
+class Inspection:
+    """Что лезвие узнало сверх опознания (Plugin.inspect, только чтение).
+
+    findings          — находки (Finding): показываются, пишутся в журнал; «block» запрещает запись;
+    measured_voltage  — замеренное напряжение цели, В (или None — не мерилось). Только добавляет
+                        проверку в шаге «Напряжение», никогда не ослабляет прежнюю.
+    В отпечаток (fingerprint) ничего из этого не входит: замеры меняются между запусками.
+    """
+
+    findings: list = field(default_factory=list)
+    measured_voltage: float | None = None

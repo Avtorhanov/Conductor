@@ -14,12 +14,21 @@ esptool, esptool.py, binwalk, sigrok-cli), которые вызывают:  fak
   FAKE_PRS_OLD=1        — старый probe-rs (у download флаг --format, а не --binary-format);
   FAKE_OPENOCD_SWD=1    — OpenOCD печатает «SWD DPIDR …» (иначе — стиль ST-Link/HLA);
   FAKE_AVRDUDE_V8=1     — avrdude 8: «Device signature = 1E 95 0F (ATmega328P)».
+  Для inspect (0.7.0):
+  FAKE_TARGET_VOLTAGE=… — что OpenOCD печатает в «Target voltage:» (по умолчанию 3.241);
+  FAKE_DEV_ID=0x…       — слово DBGMCU_IDCODE у probe-rs (по умолчанию 0x20036410, STM32F1 medium-density);
+  FAKE_WP=1             — flashrom --wp-status: весь чип защищён (режим hardware);
+  FAKE_FLASHROM_V=1.2   — версия flashrom (до 1.3 --wp-status нет);
+  FAKE_BAD_PIN=N        — minipro -z: плохой контакт вывода N;
+  FAKE_ESP_ENCRYPTED=1, FAKE_ESP_SECURE=1 — espefuse summary: шифрование флеша / secure boot включены;
+  $FAKE_DIR/avr_fuses.json — фьюзы AVR {"lfuse": 255, …} (по умолчанию Arduino: FF DA FD, lock FF).
 
 ВАЖНО: форматы вывода здесь — по документации и типичным журналам, а не с железа.
 Это проверка разбора и всего цикла; реальный формат — ПРОВЕРИТЬ НА ЖЕЛЕЗЕ.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import random
@@ -74,13 +83,30 @@ def healthy_avr() -> tuple:
     return bytes(flash), bytes(eeprom)
 
 
+# Таблица разделов ESP-IDF «singleapp»: (метка, тип, подтип, смещение, размер)
+ESP_PARTITIONS = [("nvs", 1, 0x02, 0x9000, 0x6000), ("phy_init", 1, 0x01, 0xF000, 0x1000),
+                  ("factory", 0, 0x00, 0x10000, 0x100000)]
+
+
+def esp_partition_table(parts=ESP_PARTITIONS, md5: bool = True) -> bytes:
+    """Двоичная таблица разделов, как её пишет gen_esp32part.py: записи по 32 байта, MD5, конец 0xFF."""
+    out = b""
+    for label, ptype, sub, off, size in parts:
+        out += (b"\xAA\x50" + bytes([ptype, sub]) + off.to_bytes(4, "little") + size.to_bytes(4, "little")
+                + label.encode().ljust(16, b"\x00") + (0).to_bytes(4, "little"))
+    if md5:
+        out += b"\xEB\xEB" + b"\xFF" * 14 + hashlib.md5(out).digest()
+    return out + b"\xFF" * 32
+
+
 def healthy_esp() -> bytes:
     rnd = random.Random(32)
     img = bytearray(b"\xff" * (4 * 1024 * 1024))
     img[0x1000] = 0xE9                                   # заголовок загрузчика
     img[0x1001:0x7000] = rnd.randbytes(0x7000 - 0x1001)
-    img[0x8000:0x8002] = b"\xAA\x50"                     # таблица разделов
-    img[0x9000:0x9010] = b"NVS:wifi=home123"             # «уникальные» данные
+    table = esp_partition_table()                        # таблица разделов (с 0.7.0 S4b — настоящая)
+    img[0x8000:0x8000 + len(table)] = table
+    img[0x9000:0x9010] = b"NVS:wifi=home123"             # «уникальные» данные (раздел nvs)
     img[0x10000:0x10000 + 300000] = rnd.randbytes(300000)
     return bytes(img)
 
@@ -118,6 +144,9 @@ def err(text: str) -> None:
 # ======================================================================
 def probe_rs(argv: list) -> int:
     sub = argv[0] if argv else ""
+    if argv == ["--version"]:
+        out("probe-rs 0.24.0 (git commit: crates.io)")
+        return 0
     if sub == "list":
         if ABSENT:
             out("No debug probes were found.")
@@ -146,6 +175,12 @@ def probe_rs(argv: list) -> int:
         return 2
     if "--allow-erase-all" in argv or sub == "erase":
         chip.write_bytes(b"\xff" * 65536)               # так выглядело бы «снятие защиты»
+        return 0
+    if sub == "read" and "b32" in argv:                   # регистр ID (inspect)
+        i = argv.index("b32")
+        addr = int(argv[i + 1], 0)
+        word = int(os.environ.get("FAKE_DEV_ID", "0x20036410"), 0) if addr == 0xE0042000 else 0
+        out(f"0x{addr:08x}: {word:08x}")
         return 0
     if sub == "read":
         if PROTECTED:
@@ -181,6 +216,9 @@ def probe_rs(argv: list) -> int:
 def openocd(argv: list) -> int:
     cmds = [argv[i + 1] for i, a in enumerate(argv) if a == "-c"]
     err("Open On-Chip Debugger 0.12.0")
+    if argv == ["--version"]:
+        err("Licensed under GNU GPL v2")
+        return 0
     if ABSENT:
         err("Error: open failed")
         return 1
@@ -190,11 +228,15 @@ def openocd(argv: list) -> int:
             if not chip.exists():
                 err("Error: init mode failed (unable to connect to the target)")
                 return 1
-            err("Info : STLINK V2J37S7 (API v2) VID:PID 0483:3748\nInfo : Target voltage: 3.241")
+            err("Info : STLINK V2J37S7 (API v2) VID:PID 0483:3748\nInfo : Target voltage: "
+                + os.environ.get("FAKE_TARGET_VOLTAGE", "3.241"))
             if os.environ.get("FAKE_OPENOCD_SWD") == "1":
                 err("Info : SWD DPIDR 0x1ba01477")
             else:
                 err("Info : [stm32f1x.cpu] Cortex-M3 r1p1 processor detected")
+        elif c.endswith("options_read 0"):
+            err("option byte register = 0x3fffffc\nwrite protection register = 0xffffffff\n"
+                f"read protection: {'on' if PROTECTED else 'off'}")
         elif c in ("reset halt", "halt"):
             err("[stm32f1x.cpu] halted due to debug-request, current mode: Thread")
         elif c.startswith("dump_image"):
@@ -226,6 +268,13 @@ MINIPRO_CHIPS = {"W25Q64BV": ("EF4017", 8 * 1024 * 1024), "AT24C02": (None, 256)
 
 
 def minipro(argv: list) -> int:
+    if argv == ["--version"]:
+        out("minipro version 0.7.2     A free and open TL866 series programmer")
+        return 0
+    if argv == ["--help"]:
+        err("minipro version 0.7.2\nUsage: minipro [options]\n  -D, --read_id        Just read the chip ID\n"
+            "  -z, --pin_check      Check for bad pin contact\n  -r <filename>        Read memory")
+        return 0
     if ABSENT:
         err("No programmer found.")
         return 1
@@ -236,6 +285,13 @@ def minipro(argv: list) -> int:
     chip_id, size = MINIPRO_CHIPS[dev]
     chip = path(MINIPRO)
     err("Found T48 00.1.31 (0x11f)\nDevice code: 46A16257\nSerial code: HSSCVO9LARFMOYKYOMVE5123")
+    if "-z" in argv:
+        bad = os.environ.get("FAKE_BAD_PIN")
+        if not chip.exists() or bad:
+            out(f"Bad contact on pin:{bad or 1}")
+            return 1
+        out("Pin test passed.")
+        return 0
     if "-D" in argv:
         if not chip.exists():
             err(f"Invalid Chip ID: expected 0x{chip_id or '00'}, got 0x000000 (unknown)")
@@ -266,6 +322,11 @@ def minipro(argv: list) -> int:
 
 # ======================================================================
 def avrdude(argv: list) -> int:
+    if argv == ["-?"]:
+        err("Usage: avrdude [options]\nOptions:\n  -p <partno>  Specify AVR device\n\n"
+            + ("avrdude version 8.0, https://github.com/avrdudes/avrdude" if os.environ.get("FAKE_AVRDUDE_V8") == "1"
+               else "avrdude version 7.1, URL: <https://github.com/avrdudes/avrdude>"))
+        return 1
     if ABSENT:
         err("avrdude: error: cannot find USB device with vid=0x16c0 pid=0x5dc")
         return 1
@@ -287,10 +348,23 @@ def avrdude(argv: list) -> int:
             "avrdude: erasing chip")
         flash_p.write_bytes(b"\xff" * len(flash_p.read_bytes()))
         eeprom_p.write_bytes(b"\xff" * len(eeprom_p.read_bytes()))   # chip erase стирает и EEPROM
+    fuses_p = path("avr_fuses.json")
+    fuses = {"lfuse": 0xFF, "hfuse": 0xDA, "efuse": 0xFD, "lock": 0xFF}
+    if fuses_p.exists():
+        fuses.update(json.loads(fuses_p.read_text(encoding="utf-8")))
     for spec in specs:
         mem, op, fname, _fmt = spec.split(":")
+        if mem in fuses:
+            if op != "r":
+                path("fuses_written").write_text(spec)          # так быть не должно никогда
+                err(f"avrdude: {mem} {op} — запись фьюзов (в тестах так быть не должно)")
+                return 1
+            if fname == "-":
+                out(f"0x{fuses[mem]:02x}")
+            err(f"avrdude: reading {mem} memory: | 100% | writing output file <stdout>")
+            continue
         if mem not in mems:
-            err(f"avrdude: {mem} {op} — фьюзы/lock (в тестах так быть не должно)")
+            err(f"avrdude: {mem} {op} — неизвестная память")
             continue
         if op == "r":
             data = mems[mem].read_bytes()
@@ -366,6 +440,30 @@ def esptool(argv: list) -> int:
 
 
 # ======================================================================
+def espefuse(argv: list) -> int:
+    sub = [a for a in argv if not a.startswith("-") and a not in ("/dev/ttyUSB0", "auto", "esp32")]
+    if sub != ["summary"]:
+        path("efuse_written").write_text(" ".join(argv))         # так быть не должно никогда
+        err(f"espefuse: {' '.join(argv)} — не сводка (в тестах так быть не должно)")
+        return 2
+    if ABSENT or not path(ESP).exists():
+        err("A fatal error occurred: Failed to connect to Espressif device: No serial data received.")
+        return 2
+    enc = os.environ.get("FAKE_ESP_ENCRYPTED") == "1"
+    sec = os.environ.get("FAKE_ESP_SECURE") == "1"
+    out("espefuse.py v4.8.1\nConnecting....\nDetecting chip type... ESP32\n\n=== Run \"summary\" command ===\n"
+        "EFUSE_NAME (Block) Description  = [Meaningful Value] [Readable/Writeable] (Hex Value)\n"
+        "----------------------------------------------------------------------------------------\n"
+        "Security fuses:\n"
+        f"FLASH_CRYPT_CNT (BLOCK0)    Flash encryption mode counter   = {1 if enc else 0} R/W "
+        f"(0b000000{1 if enc else 0})\n"
+        "UART_DOWNLOAD_DIS (BLOCK0)  Disable UART download mode      = False R/W (0b0)\n"
+        f"ABS_DONE_0 (BLOCK0)         Secure boot V1 is enabled for bootloader image = {sec} R/W (0b{int(sec)})\n"
+        "ABS_DONE_1 (BLOCK0)         Secure boot V2 is enabled for bootloader image = False R/W (0b0)")
+    return 0
+
+
+# ======================================================================
 def binwalk(argv: list) -> int:
     data = Path(argv[-1]).read_bytes()
     out("\nDECIMAL       HEXADECIMAL     DESCRIPTION\n" + "-" * 80)
@@ -394,8 +492,49 @@ def sigrok_cli(argv: list) -> int:
     return 0
 
 
-TOOLS = {"probe-rs": probe_rs, "openocd": openocd, "minipro": minipro, "avrdude": avrdude,
-         "esptool": esptool, "esptool.py": esptool, "binwalk": binwalk, "sigrok-cli": sigrok_cli}
+# ---------- flashrom (для теста «журнал → фикстура»; вывод — по документации, не с железа) ----------
+SPI = "spi.bin"                     # W25Q64: 8 МБ
+
+
+def flashrom(argv: list) -> int:
+    if argv == ["--version"]:
+        out(f"flashrom v{os.environ.get('FAKE_FLASHROM_V', '1.3.0')} on Linux 6.6.31+rpt-rpi-v8 (aarch64)")
+        return 0
+    out("flashrom v1.3.0 on Linux 6.6.31+rpt-rpi-v8 (aarch64)\nflashrom is free software, get the source code "
+        "at https://flashrom.org\n\nUsing clock_gettime for delay loops (clk_id: 1, resolution: 1ns).")
+    if ABSENT:
+        err("Error: No CH341A device found.")
+        return 1
+    chip = path(SPI)
+    out("Initializing ch341a_spi programmer\nDevice revision is 3.0.4\nThe following protocols are supported: SPI.")
+    out("Probing for AMIC A25L05PT, 64 kB: probe_spi_rdid_generic: id1 0xef, id2 0x4017"
+        if chip.exists() else "Probing for AMIC A25L05PT, 64 kB: probe_spi_rdid_generic: id1 0xff, id2 0xffff")
+    for i in range(400):                                   # длинный «-V»: нужное — далеко от хвоста
+        out(f"Probing for Vendor{i} CHIP{i}, {64 * (i % 9 + 1)} kB: compare_id: id1 0xef, id2 0x4017")
+    if not chip.exists():
+        out("No EEPROM/flash device found.")
+        return 2
+    out('Found Winbond flash chip "W25Q64BV/W25Q64CV/W25Q64FV" (8192 kB, SPI) on ch341a_spi.')
+    if "--wp-status" in argv:                              # только чтение регистров статуса
+        if os.environ.get("FAKE_WP") == "1":
+            out("Protection range: start=0x00000000 length=0x00800000 (all)\nProtection mode: hardware")
+        else:
+            out("Protection range: start=0x00000000 length=0x00000000 (none)\nProtection mode: disabled")
+        return 0
+    if any(a.startswith("--wp-") for a in argv):
+        path("wp_changed").write_text(" ".join(argv))           # так быть не должно никогда
+        return 1
+    out("No operations were specified.")
+    if "-r" in argv:
+        Path(argv[argv.index("-r") + 1]).write_bytes(chip.read_bytes())
+    elif "-w" in argv:
+        chip.write_bytes(Path(argv[argv.index("-w") + 1]).read_bytes())
+    return 0
+
+
+TOOLS = {"flashrom": flashrom, "probe-rs": probe_rs, "openocd": openocd, "minipro": minipro, "avrdude": avrdude,
+         "esptool": esptool, "esptool.py": esptool, "binwalk": binwalk, "sigrok-cli": sigrok_cli,
+         "espefuse": espefuse, "espefuse.py": espefuse}
 
 
 def main(tool: str, argv: list) -> int:

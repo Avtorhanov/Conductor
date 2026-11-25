@@ -6,6 +6,7 @@ group: buy
 level: 2
 icon: board
 voltage: "1,2–5,5 В (регулируемое питание и буферы выводов)"
+groups: [dialout]              # последовательный порт — группа dialout
 engines: [buspirate]
 needs: [soic8_clip]
 targets: [memory.i2c_eeprom]
@@ -19,7 +20,7 @@ steps:
     tip: Затем выйдите из системы и войдите снова.
   - Микросхему обесточьте от платы или выпаяйте. Провода — по рисунку; GND первым.
   - A0, A1, A2 (выводы 1–3) — к GND, тогда адрес 0x50. WP (7) — к GND на время записи.
-  - text: Включите лезвие в config.yaml.
+  - text: Включите лезвие — «Прибор» → «Инструменты» → bp5_i2c → «Настроить».
     code: |
       plugins:
         bp5_i2c:

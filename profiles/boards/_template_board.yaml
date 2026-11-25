@@ -21,6 +21,14 @@ preserve:                      # уникальные данные — НЕ за
     length: 0x10000
     why: MAC-адреса / серийный номер / калибровка радио
 
+# Карта разделов (необязательно, см. help/layout.md): сравнение с эталоном называет разделы,
+# рецепт restore_regions берёт из эталона только испорченные разделы с restore: true.
+# Границы — ПРОВЕРИТЬ НА ЖЕЛЕЗЕ по исправному дампу этой платы.
+# layout:
+#   - {id: boot, title: Загрузчик, offset: 0x0, length: 0x40000, kind: boot}
+#   - {id: firmware, title: Прошивка, offset: 0x40000, end: 0x7F0000, kind: kernel}
+#   - {id: unique, title: MAC и калибровки, offset: 0x7F0000, length: 0x10000, kind: unique}
+
 checks:
   - stable_read
   - not_zero
@@ -32,6 +40,9 @@ recipes:
   - id: restore_reference
     title: Записать эталонную прошивку
     action: write_reference
+# - id: restore_regions          # только вместе с layout
+#   title: Восстановить из эталона только испорченные разделы
+#   action: write_reference_regions
   - id: restore_image
     title: Записать официальный образ (--image)
     action: write_image

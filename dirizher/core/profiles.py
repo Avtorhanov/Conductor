@@ -10,6 +10,14 @@
 
 Необязательно: params — карта параметров (core/params.py) для сценария «Настройка»;
 bus — настройки шины для лезвия (например, окно регистров Modbus: start, count).
+tool — настройки лезвий для этой модели: {probe_rs: {chip: …}, openocd: {target: …, mcu: …}}; размер
+берётся из size (core/target.py). Сверка с схемой лезвия — core/target.check().
+fuses — расшифровка фьюзов и lock-битов, id_register — регистр ID для подтверждения модели (core/fuses.py);
+их читает Plugin.inspect (только чтение).
+layout — карта разделов (core/layout.py): разделы с preserve: true дополняют preserve, разделы с
+restore: true может взять из эталона рецепт с действием write_reference_regions.
+layout_auto — определители разметки (core/layout_detect.py): [esp_partitions, intel_ifd] или all. Если карты
+layout нет, сеанс строит её по содержимому копии «до» (таблица разделов ESP32, дескриптор Intel).
 Профили навыков (skills/<id>/profiles/) загружаются вместе с основными.
 """
 from __future__ import annotations
@@ -19,9 +27,12 @@ from pathlib import Path
 
 import yaml
 
+from . import fuses as fuses_mod
+from . import layout as layout_mod
+from . import layout_detect
 from .params import normalize as normalize_params
 
-KNOWN_ACTIONS = {"write_reference", "write_image"}
+KNOWN_ACTIONS = {"write_reference", "write_image", "write_reference_regions"}
 
 
 def to_int(value) -> int:
@@ -47,6 +58,11 @@ class Profile:
     notes: str = ""
     params: list = field(default_factory=list)
     bus: dict = field(default_factory=dict)
+    tool: dict = field(default_factory=dict)
+    fuses: dict = field(default_factory=dict)
+    id_register: dict = field(default_factory=dict)
+    layout: list = field(default_factory=list)
+    layout_auto: list = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, d: dict, path: Path) -> "Profile":
@@ -70,11 +86,25 @@ class Profile:
         bus = d.get("bus") or {}
         if not isinstance(bus, dict):
             raise ValueError("bus — словарь настроек шины")
+        tool = d.get("tool") or {}
+        if not isinstance(tool, dict) or not all(isinstance(v, dict) for v in tool.values()):
+            raise ValueError("tool — настройки лезвий: tool: {<лезвие>: {<ключ>: <значение>}}")
+        tool = {str(k): {str(kk): vv for kk, vv in v.items()} for k, v in tool.items()}
         params = normalize_params(d.get("params"), bus)
         size = to_int(d["size"]) if d.get("size") is not None else None
         for p in params:
             if size and p["offset"] + p["size"] > size:
                 raise ValueError(f"параметр «{p['id']}» выходит за размер {size} байт")
+        layout = layout_mod.normalize(d.get("layout"), size)
+        layout_auto = layout_detect.normalize_names(d.get("layout_auto"))
+        if not layout and not layout_auto and any(r["action"] == "write_reference_regions" for r in recipes):
+            raise ValueError("рецепту с действием write_reference_regions нужна карта разделов layout "
+                             "(или определитель layout_auto)")
+        preserve = list(d.get("preserve") or [])
+        have = {(to_int(r["offset"]), to_int(r["length"])) for r in preserve}
+        for reg in layout_mod.preserve_regions(layout):
+            if (reg["offset"], reg["length"]) not in have:
+                preserve.append(reg)
         return cls(
             id=str(d["id"]), name=str(d["name"]), target_class=str(d["class"]), path=path,
             match=d.get("match") or {}, content_match=d.get("content_match") or [],
@@ -83,8 +113,11 @@ class Profile:
             size=to_int(d["size"]) if d.get("size") is not None else None,
             allow_write=bool(d.get("allow_write", True)),
             checks=d.get("checks") or [], recipes=recipes,
-            preserve=d.get("preserve") or [], notes=d.get("notes") or "",
-            params=params, bus=bus,
+            preserve=preserve, notes=d.get("notes") or "",
+            params=params, bus=bus, tool=tool,
+            fuses=fuses_mod.normalize(d.get("fuses")),
+            id_register=fuses_mod.normalize_id_register(d.get("id_register")),
+            layout=layout, layout_auto=layout_auto,
         )
 
     @property

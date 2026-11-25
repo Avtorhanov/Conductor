@@ -21,6 +21,7 @@ from pathlib import Path
 
 from dirizher.core.models import Detection
 from dirizher.core.plugin import Plugin
+from dirizher.core.settings import field
 
 HELPER = Path(__file__).with_name("rtu.py")
 EXIT_TEXT = {3: "прибор не ответил", 4: "прибор ответил исключением Modbus"}
@@ -32,6 +33,31 @@ class ModbusRTUPlugin(Plugin):
     target_class = "device.modbus"
     hardware = True
     voltage_check = False
+    model_setting = "model"                  # у Modbus нет ID модели — из профиля (tool:) или настроек
+    preflight = [
+        "Прибор питается сам; переходник USB–RS-485: A → A, B → B, общий провод — если есть.",
+        "Адрес и скорость прибора известны (паспорт или меню прибора) и совпадают с настройками.",
+        "Запись будет только после копии текущих настроек и вашего подтверждения.",
+    ]
+    common_settings = ("enabled", "probe_timeout", "read_timeout", "write_timeout")
+    settings_defaults = {"probe_timeout": 20, "read_timeout": 60, "write_timeout": 60}
+    settings_schema = [
+        field("port", "Порт переходника USB–RS-485", "port", default="/dev/ttyUSB0", example="/dev/ttyUSB0"),
+        field("baud", "Скорость, бод", "int", default=9600, example=9600, help="Как в меню прибора."),
+        field("parity", "Чётность", "choice", default="N", choices=["N", "E", "O"]),
+        field("stopbits", "Стоп-биты", "choice", default=1, choices=[1, 2]),
+        field("unit", "Сетевой адрес прибора", "int", default=1, example=1, help="1…247"),
+        field("model", "Модель", example="THERMO-EXAMPLE", help="По ней выбирается карта параметров."),
+        field("timeout", "Ожидание ответа, с", "float", default=1.0),
+        field("retries", "Повторы", "int", default=2),
+        field("write_function", "Функция записи", "choice", default=6, choices=[6, 16],
+              help="6 — по одному регистру (понимают все); 16 — пачкой."),
+        field("echo", "Переходник возвращает эхо", "bool", default=False),
+        field("start", "Первый регистр окна", "int", default=0, help="Если в профиле нет bus."),
+        field("count", "Регистров в окне", "int", default=16),
+        field("function", "Функция чтения", "choice", default=3, choices=[3, 4]),
+        field("probe_register", "Регистр для опознания", "int", help="Пусто — первый регистр окна."),
+    ]
     voltage_note = ("прибор питается сам, связь по RS-485 — напряжение логики не сверяется. "
                     "Проверьте: A → A, B → B, общий GND; не путайте RS-485 с питанием 24 В")
 

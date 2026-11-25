@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from . import layout as layout_mod
 from .models import Finding
 from .profiles import to_int
 
@@ -125,10 +126,43 @@ def compare_reference(ci: CheckInput) -> Finding:
     if not diffs:
         return Finding("compare_reference", "ok", f"совпадает с эталоном «{ref['label']}»{note}")
     total = (len(ci.data) + SECTOR - 1) // SECTOR
+    suggest, by_region = ["restore_reference"], ""
+    layout = getattr(ci.profile, "layout", None)
+    if layout:
+        rows = region_diff(ci)
+        if rows:
+            by_region = f" По разделам: {layout_mod.describe(rows)}."
+        if any(r["restore"] for r in rows):
+            suggest.append("restore_regions")
     return Finding("compare_reference", "fail",
-                   f"отличается {len(diffs)} из {total} секторов по 4 КБ от эталона «{ref['label']}»{note}. "
-                   f"Первые: {fmt_offsets(diffs)}",
-                   ["restore_reference"])
+                   f"отличается {len(diffs)} из {total} секторов по 4 КБ от эталона «{ref['label']}»{note}."
+                   f"{by_region} Первые: {fmt_offsets(diffs)}",
+                   suggest)
+
+
+def region_diff(ci: CheckInput) -> list:
+    """Отличия от эталона по разделам карты (уникальные области не учитываются)."""
+    ref = ci.reference
+    if ref is None or not getattr(ci.profile, "layout", None) or len(ref["data"]) != len(ci.data):
+        return []
+    preserve = ref.get("preserve")
+    return layout_mod.diff(masked(ci.data, preserve), masked(ref["data"], preserve), ci.profile.layout)
+
+
+@register("layout")
+def layout_check(ci: CheckInput) -> Finding:
+    """Карта разделов профиля: пустой загрузчик — находка. Профиль без layout — проверка молчит (ok)."""
+    layout = getattr(ci.profile, "layout", None)
+    if not layout:
+        return Finding("layout", "ok", "карты разделов в профиле нет — проверка по разделам пропущена")
+    blank = layout_mod.blank_boot(ci.data, layout)
+    if blank:
+        names = ", ".join(f"«{r['title']}» ({layout_mod.span(r)})" for r in blank)
+        return Finding("layout", "fail",
+                       f"раздел загрузчика пустой: {names} — устройство не сможет запуститься",
+                       ["restore_reference", "restore_regions", "restore_image"])
+    return Finding("layout", "ok", f"разделов в карте: {len(layout)}, загрузчик на месте"
+                   if any(r["kind"] == "boot" for r in layout) else f"разделов в карте: {len(layout)}")
 
 
 def _binwalk_scan(ci: CheckInput):

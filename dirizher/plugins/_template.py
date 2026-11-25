@@ -4,7 +4,8 @@
   1. Скопируйте файл:  cp _template.py my_tool.py   (без «_» в начале!)
   2. Поменяйте name, title, target_class.
   3. Реализуйте available / probe / read / write.
-  4. Включите плагин в config.yaml:
+  4. Опишите настройки в settings_schema (по ним строится форма «Прибор → Инструменты → Настроить»
+     и ловятся опечатки) и включите плагин формой или в config.yaml:
          plugins:
            my_tool:
              enabled: true
@@ -28,6 +29,7 @@ import shutil
 
 from ..core.models import Detection
 from ..core.plugin import Plugin
+from ..core.settings import field
 
 
 class TemplatePlugin(Plugin):
@@ -35,6 +37,10 @@ class TemplatePlugin(Plugin):
     title = "Мой инструмент"
     target_class = "memory.example"      # класс целей; профили с таким class будут подходить
     hardware = True
+    # Общие поля (enabled, programmer_voltage, extra_args, таймауты) уже есть; здесь — свои.
+    settings_schema = [
+        field("port", "Порт", "port", example="/dev/ttyUSB0", help="Куда подключён адаптер."),
+    ]
 
     def available(self) -> tuple:
         if not shutil.which("my-tool"):

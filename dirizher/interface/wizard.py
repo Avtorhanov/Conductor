@@ -130,6 +130,10 @@ class Wizard:
             return self.show(int(params["session"]))
         if name in ("plugins", "profiles"):
             return self.device()
+        if name == "tool":
+            return self.tool(str(params.get("name") or ""))
+        if name == "connect":
+            return self.connect(params.get("card"))
         if name == "roadmap":
             return self.roadmap()
         if name == "builder":
@@ -347,6 +351,15 @@ class Wizard:
         for sn in d["snapshots"]:
             ui.info(f"{sn['kind_ru']}: {sn['sha'][:16]}… {sn['size']} байт, "
                     f"подтверждён: {'да' if sn['verified'] else 'нет'}")
+        if d.get("auto_layout"):
+            ui.info(f"разделы по содержимому ({d['auto_layout']['title']}):")
+            for r in d["auto_layout"]["regions"]:
+                ui.info(f"  • «{r['title']}» {r['span']}" + (" — сохраняется с чипа" if r["preserve"] else ""))
+        if d.get("regions"):
+            ui.info("разделы с отличиями от эталона:")
+            for r in d["regions"]:
+                ui.info(f"  • «{r['title']}» — секторов: {r['sectors']}"
+                        + ("" if r["restore"] else " (из эталона не берётся)"))
         for e in d["events"][-40:]:
             ui.out(f"   {e['ts']} [{e['level']}] {e['message']}")
         actions = d["actions"] + ([{"label": "Сохранить снимок в файл", "action": "export",
@@ -392,7 +405,41 @@ class Wizard:
         ui.out()
         ui.info(f"адаптер: {s['programmer_voltage']} В; слово подтверждения: {s['confirm_word']}; "
                 f"зеркало копий: {info['mirror_dir'] or 'выключено'}")
-        ui.pause("Enter — назад…")
+        tools = [p for p in info["plugins"] if p["title"] != "ошибка загрузки"]
+        idx = ui.choose("Настроить инструмент? (Enter — назад)", [f"{p['name']} — {p['title']}" for p in tools])
+        if idx is None or not 0 <= idx < len(tools):
+            return None
+        return self.tool(tools[idx]["name"])
+
+    def connect(self, card_id=None):
+        """Начать с переходника: выбрать карточку → проверки → «Настроить» / «Проверить подключение»."""
+        from ..workshop import connect
+        ui = self.ui
+        with guide.open_readonly(self.cfg, False) as c:
+            report, profiles = c.plugin_report, c.profiles
+        try:
+            v = connect.view(self.cfg, card_id, report, profiles=profiles, sim=self.sim)
+        except ValueError as e:
+            ui.error(str(e))
+            return None
+        if not card_id:
+            ui.header("Подключить инструмент: какой переходник у вас в руках?")
+            opts = [{"label": a["title"], "explain": a["tagline"], "action": "connect", "params": {"card": a["id"]}}
+                    for a in v["adapters"]]
+            return self.then(opts, "Выберите переходник (Enter — назад):")
+        ui.header(f"Подключить: {v['card']['title']}")
+        for line in connect.text(v):
+            ui.out(line)
+        return self.then(v["actions"], "Дальше (Enter — назад):")
+
+    def tool(self, name: str):
+        """Настройки лезвия поле за полем; сохранение — config.tools.yaml через капот, со словом."""
+        from ..workshop import toolsettings
+        from ..workshop.hood import Hood
+        try:
+            toolsettings.ask_fields(self.cfg, Hood(self.cfg), self.ui, self.ask_text, name)
+        except toolsettings.ToolSettingsError as e:
+            self.ui.error(str(e))
         return None
 
     def roadmap(self):

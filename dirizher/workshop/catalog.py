@@ -72,7 +72,8 @@ DRAWINGS = ("wiring", "package", "header", "chain")
 ICONS = ("chip", "usb", "clip", "board", "probe", "cable", "socket", "scope", "code", "db", "wave", "plug")
 
 LIST_FIELDS = ("strengths", "how", "in_dirizher", "caution", "verify", "steps", "targets", "adapters",
-               "engines", "needs")
+               "engines", "needs", "preflight", "groups")
+GROUP_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
 TEXT_FIELDS = ("tagline", "what", "license", "install", "check", "notes", "plugin", "program", "voltage",
                "usb", "lesson", "price", "since", "lang")
 MAX_ITEMS = 40
@@ -235,6 +236,9 @@ def validate(data, where: str = "карточка") -> list:
         value = data.get(key)
         if value is not None and not isinstance(value, (str, int, float)):
             errors.append(f"{key} — строка")
+    for g in _as_list(data.get("groups")):
+        if not GROUP_RE.match(str(g)):
+            errors.append(f"groups: «{g}» — имя группы Linux (plugdev, dialout, spi)")
     for t in _as_list(data.get("targets")):
         if str(t) not in TARGETS:
             errors.append(f"targets: «{t}» — одно из {', '.join(TARGETS)}")

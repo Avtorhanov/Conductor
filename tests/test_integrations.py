@@ -133,7 +133,7 @@ class ProbeRsTests(Base):
     def test_probe_is_read_only(self):
         self.conductor().detect_only()
         subs = {a[0] for a in self.calls("probe-rs")}
-        self.assertTrue(subs <= {"list", "info"}, subs)
+        self.assertTrue(subs <= {"list", "info", "--version"}, subs)    # --version: версия для журнала (0.7.0)
 
     def test_no_debug_probe(self):
         os.environ["FAKE_ABSENT"] = "1"
@@ -239,6 +239,8 @@ class MiniproTests(Base):
         self.chip.write_bytes(ft.healthy_w25q64())
         self.conductor().detect_only()
         for argv in self.calls("minipro"):
+            if argv == ["--version"]:                   # версия для журнала (0.7.0): чип не трогает
+                continue
             self.assertIn("-D", argv)
             self.assertFalse({"-w", "-r", "-E"} & set(argv))
 
@@ -303,6 +305,8 @@ class AvrdudeTests(Base):
     def test_probe_is_read_only(self):
         self.conductor().detect_only()
         for argv in self.calls("avrdude"):
+            if argv == ["-?"]:                          # версия для журнала (0.7.0): только справка
+                continue
             self.assertIn("-n", argv)
             self.assertNotIn("-U", argv)
 
@@ -316,7 +320,14 @@ class AvrdudeTests(Base):
                    self.flash.read_bytes, ft.healthy_avr()[0])
         specs = [a[i + 1] for a in self.calls("avrdude") for i, x in enumerate(a) if x == "-U"]
         self.assertTrue(specs)
-        self.assertTrue(all(s.split(":")[0] in ("flash", "eeprom") for s in specs), specs)
+        # 0.7.0 (S3): фьюзы и lock-биты читаются для диагностики (inspect) — только «:r:» и только с -n;
+        # пишутся по-прежнему лишь flash и eeprom.
+        fuse_reads = [a for a in self.calls("avrdude") if any(x.startswith(("lfuse", "hfuse", "efuse", "lock"))
+                                                              for x in a)]
+        self.assertTrue(all("-n" in a for a in fuse_reads), fuse_reads)
+        self.assertTrue(all(s.split(":")[0] in ("flash", "eeprom") or s.split(":")[1] == "r" for s in specs), specs)
+        self.assertTrue(all(s.split(":")[0] in ("flash", "eeprom") for s in specs if s.split(":")[1] == "w"), specs)
+        self.assertFalse((self.fake / "fuses_written").exists())
         self.assertFalse(any({"-u", "-F", "-D"} & set(a) for a in self.calls("avrdude")))
 
     def test_safemode_off_rejected(self):

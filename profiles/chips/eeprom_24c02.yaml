@@ -8,6 +8,11 @@ voltage: null          # зависит от производителя (1.7–5
 size: 256
 allow_write: true
 
+tool:                  # у 24Cxx нет ID: модель выбирается перед сеансом
+  bp5_i2c: {eeprom: 24C02}
+  pi_i2c: {eeprom: 24C02}
+  minipro: {device: AT24C02}   # ПРОВЕРИТЬ НА ЖЕЛЕЗЕ: имя в `minipro -L 24C02` вашей версии
+
 checks:
   - stable_read
   - not_zero

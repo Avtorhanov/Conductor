@@ -1,0 +1,34 @@
+# Создан по общему образцу eeprom_24c02 (0.7.0, S5): отличаются модель, объём и страница.
+id: eeprom_24c16
+name: I2C EEPROM 24C16 (2 КБ)
+class: memory.i2c_eeprom
+match:
+  name: ["24C16", "AT24C16", "24LC16", "24LC16B", "24AA16", "M24C16", "BR24C16", "CAT24C16", "FM24C16"]
+priority: 10
+voltage: null          # зависит от производителя (1.7–5.5 / 2.5–5.5 В) — подтвердите
+size: 2048
+allow_write: true
+
+tool:                  # у 24Cxx нет ID: модель выбирается перед сеансом
+  bp5_i2c: {eeprom: 24C16}
+  pi_i2c: {eeprom: 24C16}
+  minipro: {device: AT24C16}   # ПРОВЕРИТЬ НА ЖЕЛЕЗЕ: имя в `minipro -L 24C16` вашей версии
+
+checks:
+  - stable_read
+  - not_zero
+  - size_matches
+  - compare_reference
+
+recipes:
+  - id: restore_reference
+    title: Записать эталонное содержимое
+    action: write_reference
+  - id: restore_image
+    title: Записать образ (--image, 2048 байт)
+    action: write_image
+
+notes: |
+  Занимает 8 адресов на шине (0x50–0x57): выводы A0–A2 не используются — вторую 24Cxx на ту же шину не поставить.
+  Страница записи у распространённых производителей — 16 байт и больше; pi_i2c пишет по 16.
+  При записи вывод WP (7) — на GND.

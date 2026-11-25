@@ -23,6 +23,15 @@ checks:                        # какие проверки запускать 
   #   hex: "27051956"          # пример: заголовок U-Boot uImage
   #   title: заголовок загрузчика
 
+# Необязательно (0.7.0) — для диагностики лезвием (Plugin.inspect, только чтение), core/fuses.py:
+# fuses:                       # расшифровка фьюзов и lock-битов (avrdude); бит «запрограммирован» = 0
+#   lock:
+#     - name: Защита памяти (LB)
+#       mask: 0x03
+#       values: {0x03: нет защиты, 0x00: запрещены запись и чтение}
+#       status: {0x00: block}  # ok | info | warn | block
+# id_register: {address: 0xE0042000, mask: 0xFFF, expect: 0x410, title: "DBGMCU_IDCODE (DEV_ID)"}  # probe-rs
+
 recipes:                       # способы ремонта
   - id: restore_reference
     title: Записать эталонную прошивку

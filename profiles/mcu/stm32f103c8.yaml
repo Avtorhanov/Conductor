@@ -1,5 +1,6 @@
-# STM32F103C8 («Blue Pill» и многие устройства). Модель задаётся в настройках плагина
-# (probe_rs: chip, openocd: mcu) — по ней и выбирается этот профиль.
+# STM32F103C8 («Blue Pill» и многие устройства). По SWD модель не узнать: выберите её перед сеансом
+# (Штурман спросит списком, или --target stm32f103c8) — настройки лезвий возьмутся из tool: ниже,
+# размер флеша — из size. Можно и по-старому: probe_rs: chip / openocd: mcu в настройках инструмента.
 
 id: stm32f103c8
 name: STMicroelectronics STM32F103C8 (64 КБ флеш, 3.3 В)
@@ -10,6 +11,16 @@ priority: 10
 voltage: 3.3
 size: 65536            # 64 КБ; у части чипов фактически 128 КБ — тогда поменяйте flash_size и size
 allow_write: true
+
+tool:                  # настройки лезвий для этой модели (flash_size = size)
+  probe_rs: {chip: STM32F103C8, flash_base: 0x08000000}
+  openocd: {target: target/stm32f1x.cfg, mcu: STM32F103C8, flash_base: 0x08000000,
+            rdp_cmd: "stm32f1x options_read 0"}   # защита чтения: только чтение option bytes
+
+# Регистр ID: probe-rs читает его и подтверждает модель, выбранную человеком (core/fuses.py).
+# DBGMCU_IDCODE, DEV_ID (биты 11:0) = 0x410 — STM32F1 medium-density (RM0008, 31.6.1).
+# ПРОВЕРИТЬ НА ЖЕЛЕЗЕ: у клонов (CKS32, APM32, GD32) значение может отличаться — для них свой профиль.
+id_register: {address: 0xE0042000, mask: 0xFFF, expect: 0x410, title: "DBGMCU_IDCODE (DEV_ID)"}
 
 checks:
   - stable_read

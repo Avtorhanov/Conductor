@@ -174,6 +174,7 @@
       if (p === "/api/cancel") return cancel();
       if (p === "/api/login") return reply({ ok: true });
       if (p === "/api/catalog/preview") return reply(cardPreview(body.fields || {}, await CORE));
+      if (p === "/api/tool/check" || p === "/api/tool/save") return fail(403, "Демо: настройки можно только смотреть. Проверить и сохранить их можно на самом приборе («Прибор» → «Инструменты» → «Настроить»).");
       if (p === "/api/hood/check") return reply({ errors: [], warnings: [NOT_HERE], hints: [], needs_word: false });
       if (p === "/api/upload") return fail(403, NOT_HERE);
       return fail(403, NOT_HERE);
@@ -198,12 +199,14 @@
       case "/api/help": return reply({ items: helpSearch(core.help_items, q("q"), q("section")).slice(0, 80), hood: core.catalog.hood });
       case "/api/help/article": return core.articles[q("id")] ? reply(core.articles[q("id")]) : fail(404, "нет такой статьи");
       case "/api/doctor": return reply(core.doctor);
+      case "/api/tool": return (core.tools || {})[q("name")] ? reply(core.tools[q("name")]) : fail(404, "Демо: настройки этого инструмента смотрите на приборе");
       case "/api/catalog": return reply(core.catalog);
+      case "/api/connect": return q("card") ? fail(403, "Демо: проверки подключения (USB, права, программы) идут на самом приборе — здесь нет вашего переходника") : reply(core.connect || { adapters: [] });
       case "/api/catalog/card": return core.cards[q("id")] ? reply(core.cards[q("id")]) : fail(404, "нет такой карточки");
       case "/api/hood": { const hd = await hood(); return reply(hd.areas[q("area")] || hd.areas.dev); }
       case "/api/hood/file": { const hd = await hood(); return hd.files[q("path")] ? reply(hd.files[q("path")]) : fail(404, "нет такого файла в демо"); }
       case "/api/hood/history": return reply({ path: q("path"), items: [] });
-      case "/api/download": return fail(403, NOT_HERE);
+      case "/api/download": case "/api/journal": return fail(403, NOT_HERE);
     }
     return fail(404, "Демо: такого запроса нет в записи");
   }

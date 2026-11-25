@@ -427,7 +427,11 @@ class PagesTests(unittest.TestCase):
             self.assertIn("corrupt-ref", jobs["jobs"], "эталон и поломка записаны")
             repair = jobs["jobs"]["corrupt-ref"]["run"]["root"]
             self.assertEqual(repair["q"]["type"], "pause")
-            self.assertEqual(repair["br"]["ok"]["q"]["type"], "confirm_word", "ремонт доходит до слова «ДА»")
+            # у учебной платы два способа (весь эталон или только разделы) — сначала выбор, затем слово «ДА»
+            pick = repair["br"]["ok"]
+            self.assertEqual(pick["q"]["type"], "choose")
+            self.assertEqual(len(pick["q"]["options"]), 2)
+            self.assertEqual(pick["br"]["0"]["q"]["type"], "confirm_word", "ремонт доходит до слова «ДА»")
             self.assertTrue(core["hello"]["demo"])
             self.assertEqual(len(core["cards"]), core["catalog"]["total"])
             raw = json.dumps([jobs, core], ensure_ascii=False)

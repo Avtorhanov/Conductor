@@ -17,6 +17,11 @@ EEPROM и фьюзы — для AVR есть плагин avrdude.
 Запрещено (guard): -y (игнорировать неверный ID), -s/-S (игнорировать размер), -v (без сверки),
 -E (стирание), -c config / --fuses / --lock (фьюзы и биты защиты).
 
+inspect (0.7.0, только чтение): проверка контакта выводов в панельке (`minipro -p … -z`, --pin_check),
+если программа её умеет (ищется в `minipro --help`). Плохой контакт — запись запрещена: копия «до»
+с таким контактом ненадёжна.
+ПРОВЕРИТЬ НА ЖЕЛЕЗЕ: флаг -z/--pin_check вашей версии и строки «Pin test passed» / «Bad contact on pin».
+
 ПРОВЕРИТЬ НА ЖЕЛЕЗЕ: строку «Chip ID…» в выводе `minipro -D` вашей версии; как minipro
 отвечает на -D для чипов без ID (EPROM 27Cxx).
 """
@@ -27,9 +32,10 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from ..core.models import Detection
+from ..core.models import Detection, Finding
 from ..core.plugin import Plugin
-from ._common import extra_args, fail_text, guard
+from ..core.settings import field
+from ._common import CONFIRM_LINE, extra_args, fail_text, guard, tool_version
 
 FORBIDDEN = ["-y", "--no_id_error", "-s", "--no_size_error", "-S", "--no_size_warning", "-v",
              "--skip_verify", "-E", "--erase", "-c", "--fuses", "--lock", "--uid", "-x", "--skip_id"]
@@ -37,6 +43,8 @@ CHIP_ID_RE = re.compile(r"Chip ID[^:\n]*:\s*(?:0x)?([0-9A-Fa-f]+)", re.IGNORECAS
 MISMATCH_RE = re.compile(r"mismatch|expected|invalid chip id|incorrect chip id", re.IGNORECASE)
 NO_PROGRAMMER_RE = re.compile(r"no programmer found|error opening device|unable to open|programmer not found",
                               re.IGNORECASE)
+PIN_BAD_RE = re.compile(r"bad contact[^\n]*?pin\D*(\d+)", re.IGNORECASE)
+PIN_OK_RE = re.compile(r"pin test passed|pin check passed|all pins? ok", re.IGNORECASE)
 MCU_RE = re.compile(r"^(AT)?(MEGA|TINY|XMEGA|90S)|^ATMEGA|^ATTINY|^PIC|^DSPIC|^AT89|^STC|^P87|^AVR", re.I)
 
 CLASS_RULES = [
@@ -59,6 +67,19 @@ class MiniproPlugin(Plugin):
     title = "Память в панельке через T48 / TL866II+ (minipro)"
     target_class = "memory.parallel"
     hardware = True
+    model_setting = "device"                 # тип микросхемы — из профиля (tool: minipro: device)
+    preflight = [
+        "Микросхема выпаяна и стоит в панельке программатора по рисунку (вывод 1 — к рычагу), "
+        "или в переходнике SOIC-8 → DIP-8.",
+        "Тип микросхемы выбран точно по маркировке: программатор сам подаёт напряжения по этому типу.",
+        CONFIRM_LINE,
+    ]
+    settings_defaults = {"probe_timeout": 60, "read_timeout": 900, "write_timeout": 1800}
+    settings_schema = [
+        field("device", "Тип микросхемы (minipro -L)", required=True, example="AT24C02"),
+        field("target_class", "Класс цели", example="memory.i2c_eeprom",
+              help="Обычно определяется по имени сам."),
+    ]
 
     def __init__(self, conductor, settings=None):
         super().__init__(conductor, settings)
@@ -75,13 +96,17 @@ class MiniproPlugin(Plugin):
     # ---------- интерфейс плагина ----------
     def available(self) -> tuple:
         if not shutil.which("minipro"):
-            return False, "minipro не установлен (см. docs/INTEGRATIONS.md, раздел minipro)"
+            return False, "minipro не установлен (как поставить — карточка «minipro»: python3 -m dirizher catalog minipro)"
         if not self.device:
-            return False, "укажите device в config.yaml → plugins: minipro (имя из `minipro -L …`)"
+            return False, "укажите device (имя из `minipro -L …`) — «Прибор» → «Инструменты» → minipro → «Настроить»"
         if MCU_RE.search(self.device):
             return False, (f"«{self.device}» — микроконтроллер: через minipro не обслуживается "
                            f"(для AVR используйте плагин avrdude)")
         return True, f"тип из настроек: {self.device} → {self.target_class}"
+
+    def version(self):
+        # ПРОВЕРИТЬ НА ЖЕЛЕЗЕ: `minipro --version` печатает «minipro version 0.7.2 …».
+        return tool_version(self, ["minipro", "--version"], r"minipro version\s+v?(\d+\.\d+[\w.+-]*)")
 
     def probe(self):
         res = self.run(self._cmd("-D"), timeout=int(self.settings.get("probe_timeout", 60)))
@@ -106,6 +131,27 @@ class MiniproPlugin(Plugin):
         # У части микросхем (например, EPROM 27Cxx) ID нет — тип берём из настроек.
         return Detection(plugin=self.name, target_class=self.target_class, fingerprint=fp,
                          confidence=0.6, summary=f"{self.device} (ID не читается — тип из настроек)")
+
+    def _can_pin_check(self) -> bool:
+        res = self.run(["minipro", "--help"], timeout=20)
+        return "pin_check" in (res.out or "") + (res.err or "")
+
+    def inspect(self, det):
+        """Контакт выводов в панельке — только проверка, ничего не пишется."""
+        if not self._can_pin_check():
+            self.c.log("minipro: проверки контакта (--pin_check) нет в этой версии — пропущена")
+            return None
+        res = self.run(self._cmd("-z"), timeout=int(self.settings.get("probe_timeout", 60)))
+        text = res.out + "\n" + res.err
+        bad = sorted({int(n) for n in PIN_BAD_RE.findall(text)})
+        if bad:
+            return [Finding("pin_contact", "block",
+                            f"плохой контакт: вывод{'ы' if len(bad) > 1 else ''} {', '.join(map(str, bad))}. "
+                            f"Переставьте микросхему в панельке (вывод 1 — к рычагу), почистите выводы и "
+                            f"запустите снова — до этого запись запрещена.")]
+        if res.ok and PIN_OK_RE.search(text):
+            return [Finding("pin_contact", "ok", "контакт всех выводов в панельке хороший")]
+        return [Finding("pin_contact", "info", "результат проверки контакта не разобран (ПРОВЕРИТЬ НА ЖЕЛЕЗЕ)")]
 
     def read(self, det) -> bytes:
         with tempfile.TemporaryDirectory() as td:

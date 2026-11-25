@@ -15,7 +15,11 @@
 Чтение — в два шага, как в документации BP5: установить указатель адреса, затем читать.
 Запись — кусками по 8 байт, выровненными по 8: страница любой 24Cxx кратна 8, граница не пересекается.
 
-ПРОВЕРИТЬ НА ЖЕЛЕЗЕ: меню смены режима (`m`), вопросы после `W 3.3`, раскраску вывода вашей прошивки.
+Замер (0.7.0): после `W <В>` прошивка печатает «Vreg output: 3.3V, Vref/Vout pin: 3.3V» — помощник
+передаёт замер на выводе VOUT строкой «VOUT=3.30» в ответе probe (плагин отдаёт его ядру как замер).
+
+ПРОВЕРИТЬ НА ЖЕЛЕЗЕ: меню смены режима (`m`), вопросы после `W 3.3`, раскраску вывода вашей прошивки,
+строку «Vref/Vout pin: …» (если её нет — замера нет, всё как раньше).
 """
 from __future__ import annotations
 
@@ -35,6 +39,7 @@ EEPROMS = {
 }
 ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[()][A-Za-z0-9]|\x07")
 MODE_MENU_RE = re.compile(r"(\d+)\.\s*I2C\b")
+VOUT_RE = re.compile(r"Vout(?:\s*pin)?\s*:\s*([\d.]+)\s*V", re.IGNORECASE)
 RX_BYTE_RE = re.compile(r"0x([0-9A-Fa-f]{2})\s+N?ACK")
 CHUNK_READ = 16
 CHUNK_WRITE = 8
@@ -85,6 +90,7 @@ class BusPirate:
     def __init__(self, port, timeout: float = 3.0):
         self.io = port
         self.timeout = timeout
+        self.vout = None                 # замер на VOUT после включения питания, В
 
     def cmd(self, line: str) -> str:
         """Отправить строку и дождаться приглашения «…>»."""
@@ -103,9 +109,11 @@ class BusPirate:
 
     def answer_defaults(self, text: str, mode: str = "I2C") -> str:
         """Пройти вопросы меню, принимая значения по умолчанию (Enter), до приглашения режима."""
+        seen = ""                                             # весь текст меню — в нём бывает замер
         for _ in range(8):
+            seen += text
             if last_line(text) == f"{mode}>":
-                return text
+                return seen
             text = self.cmd("")
         raise RuntimeError(f"не удалось дойти до приглашения {mode}>: «{last_line(text)}»")
 
@@ -120,7 +128,9 @@ class BusPirate:
         self.answer_defaults(self.cmd(m.group(1)))
 
     def power(self, volts: float) -> None:
-        self.answer_defaults(self.cmd(f"W {volts}"))
+        text = self.answer_defaults(self.cmd(f"W {volts}"))
+        m = VOUT_RE.search(text)
+        self.vout = float(m.group(1)) if m else None
 
     def power_off(self) -> None:
         self.answer_defaults(self.cmd("w"))
@@ -213,6 +223,8 @@ def main(argv=None) -> int:
                 print("NOT_FOUND")
                 return 3
             print(f"FOUND {chip.model} @0x{chip.address:02X} size={chip.size}")
+            if bp.vout is not None:
+                print(f"VOUT={bp.vout:.2f}")
             return 0
         if not a.file:
             raise RuntimeError("не указан файл")
