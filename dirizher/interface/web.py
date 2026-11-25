@@ -390,6 +390,11 @@ class App:
                 p[key] = str(v)
             elif key == "set":
                 p[key] = guide.clean_set(v)
+            elif key == "baud":
+                v = str(v).strip().lower()
+                if v != "auto" and not (v.isdigit() and len(v) <= 7):
+                    raise ValueError("скорость — число (например, 115200) или auto")
+                p[key] = v
             elif key in ("target", "adapter"):
                 if not isinstance(v, str) or not guide.ID_PARAM.match(v):
                     raise ValueError(f"{key}: ожидался id (латиница, цифры, _)")

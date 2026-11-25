@@ -1,0 +1,34 @@
+# Создан по общему образцу eeprom_24c02 (0.7.0, S5): отличаются модель, объём и страница.
+id: eeprom_24c04
+name: I2C EEPROM 24C04 (512 байт)
+class: memory.i2c_eeprom
+match:
+  name: ["24C04", "AT24C04", "24LC04", "24LC04B", "24AA04", "M24C04", "BR24C04", "CAT24C04", "FM24C04"]
+priority: 10
+voltage: null          # зависит от производителя (1.7–5.5 / 2.5–5.5 В) — подтвердите
+size: 512
+allow_write: true
+
+tool:                  # у 24Cxx нет ID: модель выбирается перед сеансом
+  bp5_i2c: {eeprom: 24C04}
+  pi_i2c: {eeprom: 24C04}
+  minipro: {device: AT24C04}   # ПРОВЕРИТЬ НА ЖЕЛЕЗЕ: имя в `minipro -L 24C04` вашей версии
+
+checks:
+  - stable_read
+  - not_zero
+  - size_matches
+  - compare_reference
+
+recipes:
+  - id: restore_reference
+    title: Записать эталонное содержимое
+    action: write_reference
+  - id: restore_image
+    title: Записать образ (--image, 512 байт)
+    action: write_image
+
+notes: |
+  Занимает 2 адреса на шине (0x50–0x51): вывод A0 не используется, старший бит адреса памяти — в адресе устройства.
+  Страница записи у распространённых производителей — 16 байт и больше; pi_i2c пишет по 16.
+  При записи вывод WP (7) — на GND.

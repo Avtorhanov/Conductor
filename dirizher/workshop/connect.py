@@ -174,7 +174,7 @@ def _group_checks(card: dict, root) -> list:
     user = getpass.getuser()
     for g in _groups(card):
         why = {USB_GROUP: "доступ к USB-программатору", SERIAL_GROUP: "доступ к последовательному порту",
-               "spi": "доступ к SPI самого Raspberry Pi"}.get(g, "доступ к устройству")
+               "spi": "доступ к SPI самого Raspberry Pi", "i2c": "доступ к I2C самого Raspberry Pi"}.get(g, "доступ к устройству")
         if user == "root" and str(root) == "/":
             rows.append(_row(f"group_{g}", f"Группа {g}", "info", "работаете под root — группа не нужна, "
                              "но для прибора лучше обычный пользователь"))

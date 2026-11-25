@@ -51,6 +51,8 @@ sudo usermod -aG plugdev,dialout $USER     # затем перелогинить
 | OpenOCD | `plugins/openocd.py` | `mcu.arm` | GPL-2.0 | `sudo apt install openocd` |
 | minipro | `plugins/minipro.py` | по имени чипа | GPL-3.0 | сборка из gitlab.com/DavidGriffith/minipro (нужны libusb-1.0-0-dev, pkg-config) |
 | Bus Pirate 5 | `plugins/bp5_i2c.py` + `helpers/bp5_i2c.py` | `memory.i2c_eeprom` | — (свой код, stdlib) | ничего; пользователь в группе `dialout` |
+| I2C самого Pi (0.7.0) | `plugins/pi_i2c.py` + `helpers/i2c_eeprom.py` | `memory.i2c_eeprom` | — (свой код, stdlib) | `raspi-config` → I2C; пользователь в группе `i2c` |
+| Журнал по UART (0.7.0) | `extras/uart.py` (`python3 -m dirizher.extras.uart`) | — | — (свой код, stdlib) | ничего; USB-UART, группа `dialout` |
 | avrdude | `plugins/avrdude.py` | `mcu.avr` | GPL-2.0 | `sudo apt install avrdude` |
 | esptool | `plugins/esptool_flash.py` | `mcu.esp` | GPL-2.0 | `pipx install esptool` (на Raspberry Pi OS системный pip закрыт) |
 | binwalk | `core/checks.py` → `binwalk`, `binwalk_expect` | любой | MIT | `sudo apt install binwalk` (2.x) или 3.x через cargo |
@@ -161,6 +163,36 @@ sudo usermod -aG plugdev,dialout $USER     # затем перелогинить
 - **Тесты:** `tests/fakes/modbus_emulator.py` (прибор на псевдотерминале: 3/4/6/16, исключения, «молчит»,
   «живой» и «упрямый» регистры), `tests/test_params.py`.
 
+### 4.10. I2C самого Raspberry Pi — I2C EEPROM 24Cxx (0.7.0)
+- **Даёт:** 24C01…24C512 без покупок: выводы 3 (SDA), 5 (SCL), 1 (3,3 В), 6 (GND). Карточка `rpi_i2c`.
+- **Как устроено:** лезвие `pi_i2c` запускает помощник `helpers/i2c_eeprom.py` отдельным процессом; тот
+  открывает `/dev/i2c-1` и шлёт сообщения `ioctl I2C_RDWR` (структуры — `struct` и `array`, без ctypes).
+  Транспорт (`LinuxI2C`) отделён от логики 24Cxx (`Eeprom`) — в тестах транспорт заменяет эмулятор EEPROM.
+- **Чтение** кусками по 32 байта (адрес, затем чтение с повторным START). **Запись** — только изменившиеся
+  страницы (наименьшая страница у распространённых производителей: 8/16/32/64/128 байт), после каждой —
+  ожидание конца цикла записи опросом (ACK polling, до 50 мс).
+- **Опознание** только читает: 1 байт по адресам 0x50…0x57. `inspect()`: лишние адреса (24C08 вместо 24C02,
+  вторая микросхема) — `info`, недостающие — `warn` «проверьте модель».
+- **Настройки:** `bus`, `eeprom` (обычно из профиля, `tool: pi_i2c`), `address`, `page_size`, `chunk`;
+  `programmer_voltage` по умолчанию 3,3 В.
+- **ПРОВЕРИТЬ НА ЖЕЛЕЗЕ:** коды NACK драйвера i2c-bcm2835 (EREMOTEIO/ENXIO), опрос после записи на настоящей
+  24Cxx, наибольший кусок чтения, скорость шины по умолчанию.
+
+### 4.11. Журнал загрузки по UART (0.7.0)
+- `python3 -m dirizher.extras.uart --port /dev/ttyUSB0 --baud 115200 --time 15` или `--baud auto`;
+  в браузере и мастере — Штурман, урок «Журнал загрузки по UART» (действие `uart`).
+- **Только приём:** порт открыт `O_RDONLY`, ни байта в устройство (тест это проверяет); провод к RX платы не нужен.
+- Сырые байты `.bin` и текст `.txt` — в `data/captures/`, сеанс вида «замер» — в журнале; приметы загрузки
+  (U-Boot, ROM ESP, «Starting kernel», «Bad Data CRC», «Kernel panic», «Guru Meditation»…) — на экране.
+- **Подбор скорости:** слушает по очереди на распространённых скоростях; верная — та, где ≥ 85 % печатных символов.
+- Настройки — секция `uart:` в config.yaml (необязательна): `port`, `baud`, `time_s`, `max_kb`, `bauds`, `sample_s`.
+- **ПРОВЕРИТЬ НА ЖЕЛЕЗЕ:** DTR/RTS при открытии порта (на ESP с автосбросом — перезагрузка), подбор скорости на
+  настоящем журнале U-Boot, логика 1,8 В у некоторых SoC.
+
+### 4.12. CH341A в режиме I2C — не сделано (0.7.0)
+Найден `ch341eeprom` (Stefan-Olt, GPL-3.0): последний коммит — сентябрь 2022, выпусков нет, режима опознания нет,
+коды выхода и сообщения об ошибках не описаны. По правилу плана лезвие не написано — см. STATUS, «Открытые вопросы».
+
 ## 5. Изменение ядра (одно) и почему
 
 **Напряжение адаптера у каждого плагина.** Было одно `safety.programmer_voltage` на всё. Но USBasp — 5 В,
@@ -184,5 +216,8 @@ CH341A — 3.3 В, Bus Pirate 5 — регулируемый. С одним зн
   Тест кладёт в PATH обёртки с настоящими именами; каждый вызов пишется в журнал, и тесты проверяют,
   что опознание только читает, а опасных параметров не было.
 - `tests/fakes/bp5_emulator.py` — терминал Bus Pirate 5 с 24C02 на псевдотерминале (страницы, WP, NACK).
+- `tests/fakes/i2c_eeprom_emulator.py` — 24Cxx как транспорт помощника `i2c_eeprom.py` (заворот страницы,
+  занятость после записи, WP, адреса 24C04/08/16); `tests/fakes/uart_emulator.py` — плата на псевдотерминале,
+  печатает журнал U-Boot на своей скорости и мусор на чужой.
 - `tests/test_integrations.py` (45) и `tests/test_bp5.py` (9). Проверены «мутацией»: если avrdude пишет только flash,
   esptool не передаёт `keep` или BP5 пишет по 16 байт — тесты падают.

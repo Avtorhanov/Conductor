@@ -40,6 +40,11 @@ plugins:
     psu_voltage: 3.3            # BP5 питает чип; 0 — питание от платы (тогда задайте programmer_voltage)
     pullups: true
 
+  pi_i2c:                       # 0.7.0: I2C самого Raspberry Pi, EEPROM 24Cxx (карточка rpi_i2c)
+    enabled: false
+    bus: "/dev/i2c-1"           # raspi-config → Interface Options → I2C
+    address: 0x50               # модель (eeprom) спросят списком профилей перед сеансом
+
   avrdude:                      # AVR (ATmega/ATtiny) по ISP/UPDI
     enabled: false
     programmer: "usbasp"        # -c
@@ -66,3 +71,9 @@ sigrok:
   time_ms: 2000
   # decode: "spi:clk=D0:mosi=D1:miso=D2:cs=D3"
   # annotation: "spi"
+
+# 0.7.0: журнал загрузки по UART — только приём (python3 -m dirizher.extras.uart)
+uart:
+  port: "/dev/ttyUSB0"
+  baud: 115200                  # или auto — подобрать по печатным символам
+  time_s: 15

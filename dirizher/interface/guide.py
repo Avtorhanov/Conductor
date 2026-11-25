@@ -48,6 +48,8 @@ ACTIONS = {
                   "title": "Эталон из сеанса"},
     "sim": {"job": True, "params": {"do"}, "title": "Учебная микросхема"},
     "capture": {"job": True, "params": {"scan"}, "title": "Замер сигналов"},
+    # 0.7.0 — журнал загрузки по UART (только приём; baud — число или auto)
+    "uart": {"job": True, "params": {"baud"}, "title": "Журнал загрузки по UART"},
     "export": {"job": False, "params": {"session", "kind"}, "pick": "export", "title": "Дамп файлом"},
     "show": {"job": False, "params": {"session"}, "title": "Сеанс"},
     "history": {"job": False, "params": set(), "title": "Журнал"},
@@ -287,6 +289,15 @@ def execute(c, action: str, params: dict | None = None):
             raise ValueError("замер работает только с настоящим логическим анализатором — выключите учебный режим")
         from ..extras import sigrok
         return sigrok.scan(c) if p.get("scan") else sigrok.capture(c, c.cfg)
+    if action == "uart":
+        # Только приём: порт открывается на чтение, в устройство ничего не посылается.
+        if c.sim:
+            raise ValueError("журнал загрузки снимается только с настоящего порта — выключите учебный режим")
+        from ..extras import uart
+        baud = p.get("baud")
+        if baud not in (None, "") and str(baud).strip().lower() != "auto" and not str(baud).strip().isdigit():
+            raise ValueError("скорость — число (например, 115200) или auto")
+        return uart.capture(c, c.cfg, baud=baud)
     raise ValueError(f"действие «{action}» не выполняется ядром")
 
 
@@ -324,6 +335,8 @@ def job_title(action: str, params: dict, dry_run: bool = False) -> str:
         return f"Учебная микросхема: {p.get('do', '')}"
     if action == "capture":
         return "Поиск анализатора" if p.get("scan") else "Замер сигналов"
+    if action == "uart":
+        return "Журнал загрузки по UART" + (" (подбор скорости)" if str(p.get("baud", "")).lower() == "auto" else "")
     if action == "tune":
         return "Настройка параметров" + (" (без записи)" if dry_run else "")
     title = ACTIONS.get(action, {}).get("title", action)
@@ -681,6 +694,14 @@ def after(action: str, params: dict | None, outcome: str | None, sid, sim: bool 
             return [first, _opt("Открыть журнал сеанса", action="show", params={"session": sid}) if sid
                     else _opt("К началу", next="home"), _opt("Как читать замер", lesson="tool_sigrok")]
         return [_opt("Что проверить", lesson="tool_sigrok"), _opt("Попробовать ещё раз", **same)]
+    if action == "uart":
+        if outcome == "captured":
+            return [_opt("Снять ещё раз", **same),
+                    _opt("Открыть журнал сеанса", action="show", params={"session": sid}) if sid
+                    else _opt("К началу", next="home"), _opt("Как читать журнал загрузки", lesson="tool_uart")]
+        return [_opt("Что проверить", lesson="tool_uart"), _opt("Подобрать скорость", action="uart",
+                                                                 params={"baud": "auto"}),
+                _opt("Попробовать ещё раз", **same)]
     if outcome is None:
         return []
     real = dict(p)

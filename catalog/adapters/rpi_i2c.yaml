@@ -1,0 +1,65 @@
+id: rpi_i2c
+kind: adapter
+title: I2C самого Raspberry Pi (собрать)
+tagline: Без покупок — четыре провода от гребёнки Pi к EEPROM 24Cxx
+group: diy
+level: 2
+icon: board
+voltage: "3,3 В (логика и питание от Raspberry Pi)"
+engines: [linux_i2c]
+needs: [soic8_clip]
+targets: [memory.i2c_eeprom]
+groups: [i2c]                  # /dev/i2c-* — группа i2c (Raspberry Pi OS)
+what: >-
+  У Raspberry Pi есть своя шина I2C с логикой 3,3 В и подтяжками на плате. Четырёх проводов «мама-мама»
+  или прищепки хватает, чтобы прочитать и записать EEPROM 24Cxx — лезвие pi_i2c, без внешних программ.
+steps:
+  - text: Включите I2C и перезагрузитесь.
+    code: sudo raspi-config     # Interface Options → I2C → Enable
+  - text: Права на шину — один раз (затем выйдите из системы и войдите снова).
+    code: sudo usermod -aG i2c $USER
+  - Выключите Pi. Подключите провода по рисунку — короткие, до 15 см; GND первым.
+  - A0, A1, A2 (выводы 1–3) — к GND, тогда адрес 0x50. WP (7) — к GND на время записи.
+  - text: Проверьте, что шина появилась.
+    code: ls /dev/i2c-1
+  - text: Включите лезвие — «Прибор» → «Инструменты» → pi_i2c → «Настроить» (или в config.yaml).
+    code: |
+      plugins:
+        pi_i2c:
+          enabled: true
+          bus: "/dev/i2c-1"
+  - Модель 24Cxx спросят списком перед сеансом — как на корпусе микросхемы.
+check: "/dev/i2c-1 есть, «Узнать, что за микросхема» — «I2C EEPROM отвечает по адресу 0x50»."
+drawings:
+  - type: wiring
+    title: Провода
+    a_title: Raspberry Pi (вывод)
+    b_title: EEPROM 24Cxx
+    wires:
+      - {a: "6 · GND", b: "4 · GND", color: black, note: "подключайте первым"}
+      - {a: "1 · 3,3 В", b: "8 · VCC", color: red}
+      - {a: "3 · SDA (GPIO2)", b: "5 · SDA", color: blue, note: "подтяжка уже на плате Pi"}
+      - {a: "5 · SCL (GPIO3)", b: "6 · SCL", color: yellow, note: "подтяжка уже на плате Pi"}
+      - {a: "6 · GND", b: "1–3 · A0–A2", color: black, note: "адрес 0x50"}
+      - {a: "6 · GND", b: "7 · WP", color: black, note: "запись разрешена"}
+  - type: header
+    title: "Гребёнка Raspberry Pi, 40 выводов (вывод 1 — квадратная площадка)"
+    count: 40
+    rows: 2
+    pins:
+      1: {label: "3,3 В", color: red, to: "VCC (8)"}
+      3: {label: SDA, color: blue, to: "SDA (5)"}
+      5: {label: SCL, color: yellow, to: "SCL (6)"}
+      6: {label: GND, color: black, to: "GND (4), A0–A2, WP"}
+  - type: package
+    title: "EEPROM 24Cxx — вид сверху"
+    style: soic
+    pins: [A0, A1, A2, GND, SDA, SCL, WP, VCC]
+    mark: {A0: black, A1: black, A2: black, GND: black, SDA: blue, SCL: yellow, WP: black, VCC: red}
+caution:
+  - "Только микросхемы на 3,3 В. На 5 В выводы Pi повреждаются, микросхему на 1,8 В можно повредить"
+  - Микросхема на плате — обесточьте плату; лучше выпаять или поднять вывод VCC, чтобы Pi не питал всю плату
+  - "WP на питании: запись не пройдёт сверку — Дирижёр предложит вернуть копию «до»"
+verify:
+  - Ответ NACK драйвера i2c-bcm2835 на отсутствующий адрес и ожидание цикла записи
+  - Стабильность чтения на ваших проводах (длинные провода — медленнее шина, dtparam=i2c_arm_baudrate)

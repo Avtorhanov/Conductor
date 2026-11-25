@@ -1,0 +1,41 @@
+id: linux_i2c
+kind: engine
+title: I2C в Linux (i2c-dev) и помощник Дирижёра
+tagline: Шина I2C самого Raspberry Pi — драйвер ядра Linux и помощник на стандартной библиотеке
+group: tool
+level: 2
+icon: board
+since: "1999"
+lang: C (ядро Linux), Python (помощник)
+license: GPL-2.0 (ядро Linux); помощник — как Дирижёр
+authors:
+  - name: Simon G. Vogl и Frodo Looijaard
+    role: авторы подсистемы I2C и устройства i2c-dev в ядре Linux
+  - name: Сообщество ядра Linux
+    role: драйвер шины Raspberry Pi (i2c-bcm2835) и сопровождение подсистемы I2C
+links:
+  - {title: Документация ядра — i2c-dev, url: "https://docs.kernel.org/i2c/dev-interface.html"}
+what: >-
+  Ядро Linux даёт шину I2C файлом /dev/i2c-1. Программа открывает его и посылает сообщения
+  (запись, чтение, запись с чтением через повторный START). Внешние программы не нужны.
+strengths:
+  - Ничего не покупать и не ставить — всё есть в Raspberry Pi OS
+  - Подтяжки SDA и SCL уже стоят на плате Pi
+  - Один обмен «адрес + чтение» без лишних STOP — так 24Cxx и читается
+how:
+  - "raspi-config → I2C включает драйвер и создаёт /dev/i2c-1"
+  - "ioctl I2C_RDWR — несколько сообщений одним обменом: адрес памяти, затем чтение"
+  - "Нет ответа (NACK) — ошибка ввода-вывода: микросхемы нет по этому адресу или она занята записью"
+in_dirizher:
+  - "Лезвие pi_i2c: помощник-процесс helpers/i2c_eeprom.py (только стандартная библиотека)"
+  - "Опознание только читает: 1 байт по адресам 0x50…0x57 — какие отвечают; лишние адреса — подсказка проверить модель"
+  - "Чтение кусками по 32 байта; запись — только изменившиеся страницы с ожиданием цикла записи"
+  - "У 24Cxx нет ID: модель из профиля (спросят списком), уверенность 0,7"
+plugin: pi_i2c
+targets: [memory.i2c_eeprom]
+adapters: [rpi_i2c]
+examples:
+  - {title: Шина есть, cmd: "ls /dev/i2c-1"}
+  - {title: Через Дирижёр, cmd: "python3 -m dirizher detect", note: "лезвие pi_i2c включено"}
+verify:
+  - Коды ошибок NACK драйвера i2c-bcm2835 и время цикла записи вашей 24Cxx
