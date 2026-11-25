@@ -17,7 +17,7 @@ from pathlib import Path
 from .checks import CHECKS, DEFAULT_CHECKS, CheckInput, diff_sectors, is_fill
 from .learning import Learning
 from .memory import Memory, now
-from .models import Finding, chip_key
+from .models import Finding, Inspection, chip_key
 from .params import apply_changes, read_all as param_rows
 from .profiles import ProfileDB, to_int
 from .registry import load_plugins
@@ -98,6 +98,8 @@ class Conductor:
         self.runner = Runner(self.log, self._keep_output)
         self._versions = set()           # (сеанс, лезвие): версия уже записана
         self.target = None               # профиль модели, выбранный человеком (select)
+        self.inspected = []              # находки Plugin.inspect текущего сеанса
+        self._measured = {}              # лезвие → замеренное напряжение цели, В (текущий сеанс)
         self.only = None                 # опрашивать только эти лезвия (выбран переходник)
         self.preflight = None            # строки «Подготовки» из карточки переходника
         self.plugins, self.plugin_report = load_plugins(self, cfg, sim, self.skills.active)
@@ -175,6 +177,7 @@ class Conductor:
 
     def _start(self, kind: str, parent: int | None = None) -> int:
         self.session = self.memory.start_session(kind, parent)
+        self.inspected, self._measured = [], {}
         mode = (" — пробный режим" if self.dry_run else "") + (" — симулятор" if self.sim else "")
         self.log(f"начат сеанс «{kind}»{mode}")
         return self.session
@@ -259,6 +262,36 @@ class Conductor:
         except KeyError:
             pass
 
+    def inspect(self, plugin, det) -> list:
+        """Plugin.inspect: что ещё программа узнаёт только чтением (защита, фьюзы, ID, замер напряжения).
+
+        Находки показываются и пишутся в журнал; «block» потом запрещает запись (write_blockers).
+        Замер напряжения запоминается для шага «Напряжение». Ошибка здесь сеанс не роняет."""
+        try:
+            res = plugin.inspect(det)
+        except Exception as e:                       # сведения — дополнение, сеанс продолжается
+            self.log(f"{plugin.name}: дополнительная проверка не удалась: {e}", "error")
+            res = [Finding("inspect", "info", f"дополнительные сведения от программы не получены: {e}")]
+        if res is None:
+            res = Inspection()
+        elif isinstance(res, (list, tuple)):
+            res = Inspection(findings=list(res))
+        found = [f for f in res.findings if isinstance(f, Finding)]
+        for f in found:
+            self.ui.finding(f)
+            self.log(f"[{f.status}] {f.check}: {f.message}", data={"inspect": plugin.name})
+        if res.measured_voltage is not None:
+            try:
+                volts = float(res.measured_voltage)
+            except (TypeError, ValueError):
+                self.log(f"{plugin.name}: замер напряжения не разобран: {res.measured_voltage!r}", "error")
+            else:
+                self._measured[plugin.name] = volts
+                self.log(f"замер напряжения цели: {volts:.3f} В ({plugin.title})",
+                         data={"measured_voltage": volts, "tool": plugin.name})
+        self.inspected = found
+        return found
+
     def adapter_voltage(self, plugin=None) -> float:
         """Напряжение адаптера: своё у плагина (programmer_voltage в его настройках) или общее."""
         v = plugin.settings.get("programmer_voltage") if plugin is not None else None
@@ -273,14 +306,27 @@ class Conductor:
         pv = self.adapter_voltage(plugin)
         status, msg = self.safety.voltage_check(profile, pv)
         self.log(f"напряжение: {status}: {msg}")
-        if status == "block":
+        if status == "block":                        # прежний запрет — всегда запрет, замер его не снимает
             self.ui.error(msg)
             return False
+        # Замер (Plugin.inspect) только добавляет: может остановить, но не отменяет вопрос и запрет выше.
+        measured = self._measured.get(plugin.name) if plugin is not None else None
+        m_msg = None
+        if measured is not None:
+            m_status, m_msg = self.safety.measured_check(profile, pv, measured)
+            self.log(f"замер напряжения: {m_status}: {m_msg}", data={"measured_voltage": measured})
+            if m_status == "block":
+                self.ui.error(m_msg)
+                return False
         if status == "warn":
             self.ui.warn(msg)
             answer = self.ui.yes_no(f"Вы проверили по даташиту, что чип рассчитан на {pv} В?")
-            return answer == "yes"
-        self.ui.ok(msg)
+            if answer != "yes":
+                return False
+        else:
+            self.ui.ok(msg)
+        if m_msg:
+            self.ui.ok(m_msg)
         return True
 
     def backup(self, plugin, det, kind: str = "before") -> tuple:
@@ -489,6 +535,7 @@ class Conductor:
             ui.info(f"черновик точного профиля (для обучения): {draft}")
         else:
             ui.ok(f"профиль: {det.profile.name}")
+        inspected = self.inspect(plugin, det)
 
         ui.step(3, STEPS, "Совместимость по напряжению")
         if not self._voltage_gate(det.profile, plugin):
@@ -514,7 +561,8 @@ class Conductor:
 
         ui.step(5, STEPS, "Диагностика")
         ref = self.find_reference(det, label)
-        findings = self.diagnose(det, data, verified, ref)
+        diag = self.diagnose(det, data, verified, ref)
+        findings = inspected + diag            # находки inspect — как диагностика: «block» запрещает запись
 
         ui.step(6, STEPS, "План ремонта")
         ranked, hints = self.plan(det, findings, ref, image_path)
@@ -524,7 +572,8 @@ class Conductor:
             if any(f.status == "block" for f in findings):
                 ui.error("есть блокирующие проблемы — устраните их и запустите снова")
                 return self._finish("blocked")
-            if any(f.status in ("warn", "fail") for f in findings):
+            # замечания inspect (защита записи, шифрование…) — сведения об устройстве, а не о прошивке
+            if any(f.status in ("warn", "fail") for f in diag):
                 ui.warn("есть замечания, но подходящего способа ремонта сейчас нет")
                 return self._finish("no_action")
             ui.ok("неисправностей в прошивке не найдено")
@@ -659,6 +708,7 @@ class Conductor:
             ui.info(f"сейчас: {now_fp}")
             return self._finish("blocked")
         plugin = self.plugin(det.plugin)
+        inspected = self.inspect(plugin, det)
 
         ui.step(2, 5, "Совместимость по напряжению")
         if det.profile is None or not self._voltage_gate(det.profile, plugin):
@@ -671,7 +721,7 @@ class Conductor:
             return self._finish("already_same")
 
         ui.step(4, 5, "Проверка условий записи")
-        blockers = self.safety.write_blockers(verified=verified, findings=[], profile=None,
+        blockers = self.safety.write_blockers(verified=verified, findings=inspected, profile=None,
                                               image=data_before, chip_size=len(data), dry_run=self.dry_run)
         if blockers:
             for b in blockers:
@@ -715,6 +765,7 @@ class Conductor:
             return None, None, "no_params"
         if det.profile is not None:
             ui.ok(f"профиль: {det.profile.name}")
+        self.inspect(plugin, det)
         ui.step(first_step + 1, total, "Совместимость по напряжению")
         if not self._voltage_gate(det.profile, plugin):
             return None, None, "blocked_voltage"
@@ -811,7 +862,7 @@ class Conductor:
             return self._finish("no_change")
         for line in lines:
             ui.info("• " + line)
-        blockers = self.safety.write_blockers(verified=verified, findings=[], profile=det.profile,
+        blockers = self.safety.write_blockers(verified=verified, findings=self.inspected, profile=det.profile,
                                               image=image, chip_size=len(data), dry_run=self.dry_run)
         if blockers:
             only_dry = self.dry_run and len(blockers) == 1

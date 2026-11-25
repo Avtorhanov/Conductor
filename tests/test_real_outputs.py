@@ -242,7 +242,8 @@ class JournalFlowTests(FakeBase):
         sid = c.run()
         self.assertEqual(self.outcome(c, sid), "healthy", self.text(c))
         rows = journal.commands(c.memory.logs_dir, sid)
-        reads = [r for r in rows if r["argv"][1] == "read"]
+        # 0.7.0 (S3): `read b32` регистра ID (inspect) — не дамп, его вывод нужен для сверки формата на железе
+        reads = [r for r in rows if r["argv"][1] == "read" and "b8" in r["argv"]]
         self.assertTrue(reads)
         self.assertTrue(all(r["kept"] is False and r["stdout"] == "" for r in reads))
         self.assertIn({"plugin": "probe_rs", "version": "0.24.0"},

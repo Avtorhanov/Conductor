@@ -12,6 +12,8 @@
 bus — настройки шины для лезвия (например, окно регистров Modbus: start, count).
 tool — настройки лезвий для этой модели: {probe_rs: {chip: …}, openocd: {target: …, mcu: …}}; размер
 берётся из size (core/target.py). Сверка с схемой лезвия — core/target.check().
+fuses — расшифровка фьюзов и lock-битов, id_register — регистр ID для подтверждения модели (core/fuses.py);
+их читает Plugin.inspect (только чтение).
 Профили навыков (skills/<id>/profiles/) загружаются вместе с основными.
 """
 from __future__ import annotations
@@ -21,6 +23,7 @@ from pathlib import Path
 
 import yaml
 
+from . import fuses as fuses_mod
 from .params import normalize as normalize_params
 
 KNOWN_ACTIONS = {"write_reference", "write_image"}
@@ -50,6 +53,8 @@ class Profile:
     params: list = field(default_factory=list)
     bus: dict = field(default_factory=dict)
     tool: dict = field(default_factory=dict)
+    fuses: dict = field(default_factory=dict)
+    id_register: dict = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, d: dict, path: Path) -> "Profile":
@@ -92,6 +97,8 @@ class Profile:
             checks=d.get("checks") or [], recipes=recipes,
             preserve=d.get("preserve") or [], notes=d.get("notes") or "",
             params=params, bus=bus, tool=tool,
+            fuses=fuses_mod.normalize(d.get("fuses")),
+            id_register=fuses_mod.normalize_id_register(d.get("id_register")),
         )
 
     @property

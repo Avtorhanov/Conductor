@@ -33,6 +33,7 @@ in_dirizher:
   - "Лезвие openocd; interface, target и модель mcu — в config.yaml"
   - "Опознание — -c init -c shutdown: строки IDCODE/DPIDR и напряжение цели"
   - "Запрещены команды со словами unlock, lock, mass_erase, protect, option_write — даже в extra_args"
+  - "Для диагностики (только чтение): замер «Target voltage» — сверяется с профилем, расхождение останавливает сеанс; защита чтения — командой из профиля (у STM32F1: stm32f1x options_read 0)"
 plugin: openocd
 program: openocd
 targets: [mcu.arm]

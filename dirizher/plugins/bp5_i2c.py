@@ -16,6 +16,10 @@ Bus Pirate 5 управляется через свой текстовый те�
 Вывод WP микросхемы при записи должен быть на GND, иначе запись не пройдёт сверку (это безопасно:
 ядро предложит вернуть копию «до»).
 
+inspect (0.7.0, только чтение): замер на выводе VOUT, если прошивка его показала после `W <В>`
+(помощник печатает «VOUT=3.30»). Ядро сверяет замер с профилем и напряжением адаптера: просевшее
+питание или чип не на то напряжение — стоп. При psu_voltage: 0 замера нет — всё как раньше.
+
 ПРОВЕРИТЬ НА ЖЕЛЕЗЕ: см. docs/INTEGRATIONS.md, раздел Bus Pirate 5.
 """
 from __future__ import annotations
@@ -25,12 +29,13 @@ import sys
 import tempfile
 from pathlib import Path
 
-from ..core.models import Detection
+from ..core.models import Detection, Inspection
 from ..core.plugin import Plugin
 from ..core.settings import field
 from ._common import CONFIRM_LINE, as_int
 
 HELPER = Path(__file__).resolve().parent.parent / "helpers" / "bp5_i2c.py"
+VOUT_RE = re.compile(r"^VOUT=([\d.]+)\s*$", re.MULTILINE)
 EEPROM_SIZES = {"24C01": 128, "24C02": 256, "24C04": 512, "24C08": 1024, "24C16": 2048, "24C32": 4096,
                 "24C64": 8192, "24C128": 16384, "24C256": 32768, "24C512": 65536}
 
@@ -70,6 +75,7 @@ class BusPirateI2CPlugin(Plugin):
         psu = float(self.settings.get("psu_voltage", 3.3) or 0)
         if psu and "programmer_voltage" not in self.settings:
             self.settings["programmer_voltage"] = psu        # BP5 сам питает чип этим напряжением
+        self._vout = None
 
     @property
     def model(self) -> str:
@@ -113,10 +119,18 @@ class BusPirateI2CPlugin(Plugin):
         if not res.ok:
             raise RuntimeError(res.tail() or "помощник Bus Pirate завершился с ошибкой")
         size = EEPROM_SIZES[self.model]
+        vout = VOUT_RE.search(res.out or "")
+        self._vout = float(vout.group(1)) if vout else None   # замер — не в отпечаток
         fp = {"name": self.model, "size": size, "i2c_address": self.address}
         return Detection(plugin=self.name, target_class=self.target_class, fingerprint=fp, confidence=0.7,
                          summary=f"I2C EEPROM отвечает по адресу {fp['i2c_address']}; "
                                  f"модель из настроек: {self.model} ({size} байт)")
+
+    def inspect(self, det):
+        """Замер на VOUT из опознания (если прошивка его показала)."""
+        if self._vout is None:
+            return None
+        return Inspection(measured_voltage=self._vout)
 
     def read(self, det) -> bytes:
         with tempfile.TemporaryDirectory() as td:

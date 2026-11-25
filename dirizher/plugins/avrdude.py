@@ -17,6 +17,12 @@ avrdude не сохраняет хвост флеша из 0xFF — плагин
 Запрещено (guard): -u (отключить safemode фьюзов), -F (игнорировать подпись), -D (без стирания —
 испортит запись), -e, -t, а также любые -U в extra_args (фьюзы и lock-биты не трогаем никогда).
 
+inspect (0.7.0, только чтение): если в профиле есть `fuses:` — `avrdude … -n -U lfuse:r:-:h …` (режим
+«ничего не писать», значения в stdout) и расшифровка по профилю (core/fuses.py): тактирование, BOD,
+загрузчик, защита. Lock-биты «чтение запрещено» запрещают запись (копия была бы недостоверной).
+Запись фьюзов по-прежнему запрещена: в команде только «:r:», это проверяется перед запуском.
+ПРОВЕРИТЬ НА ЖЕЛЕЗЕ: вывод `-U lfuse:r:-:h` — по строке «0x..» на каждую память, в порядке -U.
+
 ПРОВЕРИТЬ НА ЖЕЛЕЗЕ: строку «Device signature = …» вашей версии (6.x: «0x1e950f», 7–8.x: «1E 95 0F»).
 """
 from __future__ import annotations
@@ -26,7 +32,8 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from ..core.models import Detection
+from ..core import fuses as fuses_mod
+from ..core.models import STATUS_ORDER, Detection, Finding
 from ..core.plugin import Plugin
 from ..core.settings import field
 from ._common import PREFLIGHT_ISP, as_int, extra_args, fail_text, guard, tool_version
@@ -38,6 +45,8 @@ SIG_NAME_RE = re.compile(r"device signature[^\n(]*\(([^)]+)\)", re.IGNORECASE)
 NO_ANSWER_RE = re.compile(r"initiali[sz]ation failed|target doesn't answer|cannot find usb device|"
                           r"not responding|programmer is not responding|could not find", re.IGNORECASE)
 MISMATCH_RE = re.compile(r"expected signature", re.IGNORECASE)
+FUSE_MEMS = ("lfuse", "hfuse", "efuse", "fuse", "lock")
+FUSE_VALUE_RE = re.compile(r"^\s*0x([0-9a-fA-F]{1,2})\s*$", re.MULTILINE)
 
 
 class AvrdudePlugin(Plugin):
@@ -130,6 +139,39 @@ class AvrdudePlugin(Plugin):
                   + f"; образ {' + '.join(self.memories)} = {total} байт"
         return Detection(plugin=self.name, target_class=self.target_class, fingerprint=fp,
                          confidence=0.9, summary=summary)
+
+    def fuse_command(self, mems: list) -> list:
+        """Команда чтения фьюзов: -n (ничего не писать) и только «<память>:r:-:h»."""
+        cmd = self._base() + ["-n"]
+        for mem in mems:
+            if mem not in FUSE_MEMS:
+                raise RuntimeError(f"avrdude: «{mem}» — не фьюз и не lock")
+            cmd += ["-U", f"{mem}:r:-:h"]
+        specs = [cmd[i + 1] for i, a in enumerate(cmd) if a == "-U"]
+        if not all(sp.split(":")[1:2] == ["r"] for sp in specs):           # страховка: только чтение
+            raise RuntimeError("avrdude: фьюзы и lock-биты Дирижёр только читает")
+        return cmd
+
+    def inspect(self, det):
+        """Фьюзы и lock-биты: прочитать (только чтение) и объяснить по данным профиля."""
+        spec = getattr(det.profile, "fuses", None) or {}
+        if not spec:
+            return None
+        mems = [m for m in spec if m in FUSE_MEMS]
+        res = self.run(self.fuse_command(mems), timeout=int(self.settings.get("probe_timeout", 60)))
+        values = [int(v, 16) for v in FUSE_VALUE_RE.findall(res.out or "")]
+        if not res.ok or len(values) != len(mems):
+            return [Finding("fuses", "info", "фьюзы не прочитаны — разбор вывода avrdude не сошёлся "
+                                             "(ПРОВЕРИТЬ НА ЖЕЛЕЗЕ)")]
+        raw = dict(zip(mems, values))
+        out = []
+        for mem, value, parts in fuses_mod.decode(spec, raw):
+            status = max((p[2] for p in parts), key=lambda st: STATUS_ORDER.get(st, 0), default="ok")
+            text = "; ".join(f"{name} — {txt}" for name, txt, _st, _why in parts)
+            why = " ".join(w for _n, _t, st, w in parts if w and st in ("warn", "block"))
+            out.append(Finding(f"fuses {mem}", "info" if status == "ok" else status,
+                               f"0x{value:02X}: {text}" + (f". {why}" if why else "")))
+        return out
 
     def read(self, det) -> bytes:
         sizes = self._sizes()

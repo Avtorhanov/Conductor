@@ -7,6 +7,11 @@ flashrom — внешняя программа (лицензия GPL), поэт�
 На первом запуске с настоящим чипом выполните `python3 -m dirizher detect` и посмотрите
 журнал сеанса (data/logs/): если JEDEC ID не распознался, поправьте регулярные
 выражения ниже по реальному выводу `flashrom -p ch341a_spi -V`.
+
+inspect (0.7.0, только чтение): `flashrom … --wp-status` (есть с flashrom 1.3) — состояние защиты записи.
+Объясняет «записалось, но не изменилось»: защищённую область flashrom не сотрёт и не перепишет.
+Дирижёр защиту не снимает (никаких --wp-disable / --wp-range).
+ПРОВЕРИТЬ НА ЖЕЛЕЗЕ: строки «Protection range: start=0x… length=0x… (…)» и «Protection mode: …».
 """
 from __future__ import annotations
 
@@ -15,7 +20,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from ..core.models import Detection
+from ..core.models import Detection, Finding
 from ..core.plugin import Plugin
 from ..core.settings import field
 from ._common import tool_version
@@ -23,6 +28,12 @@ from ._common import tool_version
 FOUND_RE = re.compile(r'Found (.+?) flash chip "(.+?)" \((\d+) kB, (\w+)\)')
 RDID_RE = re.compile(r"rdid\w*:\s*id1 0x([0-9a-fA-F]+),\s*id2 0x([0-9a-fA-F]+)", re.IGNORECASE)
 NOT_FOUND = "No EEPROM/flash device found"
+WP_RANGE_RE = re.compile(r"Protection range:\s*start=0x([0-9a-fA-F]+)\s+length=0x([0-9a-fA-F]+)(?:\s*\(([^)]*)\))?",
+                         re.IGNORECASE)
+WP_MODE_RE = re.compile(r"Protection mode:\s*([\w-]+)", re.IGNORECASE)
+WP_MIN_VERSION = (1, 3)
+WP_MODES = {"disabled": "выключена", "hardware": "аппаратная (пока вывод WP на земле, её не снять)",
+            "power_cycle": "до выключения питания", "permanent": "постоянная (навсегда)"}
 
 
 class FlashromSPIPlugin(Plugin):
@@ -54,7 +65,37 @@ class FlashromSPIPlugin(Plugin):
 
     def version(self):
         # ПРОВЕРИТЬ НА ЖЕЛЕЗЕ: `flashrom --version` печатает «flashrom v1.3.0 on Linux …» (или без «v»).
-        return tool_version(self, ["flashrom", "--version"], r"flashrom\s+v?(\d+\.\d+[\w.+-]*)")
+        if not hasattr(self, "_version"):            # один запуск на сеанс: inspect тоже спрашивает версию
+            self._version = tool_version(self, ["flashrom", "--version"], r"flashrom\s+v?(\d+\.\d+[\w.+-]*)")
+        return self._version
+
+    def inspect(self, det):
+        """Состояние защиты записи (--wp-status) — только чтение регистров статуса чипа."""
+        ver = self.version()
+        nums = tuple(int(x) for x in re.findall(r"\d+", ver or "")[:2])
+        if len(nums) < 2 or nums < WP_MIN_VERSION:
+            self.c.log(f"flashrom {ver or '?'}: --wp-status есть с 1.3 — защита записи не проверялась")
+            return None
+        res = self.run(self._base(det.fingerprint.get("flashrom_chip")) + ["--wp-status"],
+                       timeout=int(self.settings.get("probe_timeout", 120)))
+        text = res.out + "\n" + res.err
+        rng, mode = WP_RANGE_RE.search(text), WP_MODE_RE.search(text)
+        if not rng and not mode:
+            return [Finding("write_protect", "info",
+                            "состояние защиты записи flashrom для этого чипа не сообщил (ПРОВЕРИТЬ НА ЖЕЛЕЗЕ)")]
+        mode_id = mode.group(1).lower() if mode else ""
+        mode_ru = WP_MODES.get(mode_id, mode_id or "не указан")
+        start, length = (int(rng.group(1), 16), int(rng.group(2), 16)) if rng else (0, 0)
+        if length == 0 and mode_id in ("", "disabled"):
+            return [Finding("write_protect", "ok", "защита записи выключена")]
+        if length == 0:
+            return [Finding("write_protect", "info", f"режим защиты записи: {mode_ru}, но защищённой области нет")]
+        size = int(det.fingerprint.get("size") or 0)
+        whole = " — весь чип" if size and start == 0 and length >= size else ""
+        return [Finding("write_protect", "warn",
+                        f"включена защита записи: область 0x{start:X}+0x{length:X}{whole}, режим {mode_ru}. "
+                        f"Запись туда не пройдёт — сверка покажет «не совпало», а прежнее содержимое останется. "
+                        f"Дирижёр защиту не снимает: если она мешает, разберитесь по даташиту чипа и платы.")]
 
     def probe(self):
         # Без операции flashrom только опознаёт чип — ничего не читает и не пишет.

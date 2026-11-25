@@ -320,7 +320,14 @@ class AvrdudeTests(Base):
                    self.flash.read_bytes, ft.healthy_avr()[0])
         specs = [a[i + 1] for a in self.calls("avrdude") for i, x in enumerate(a) if x == "-U"]
         self.assertTrue(specs)
-        self.assertTrue(all(s.split(":")[0] in ("flash", "eeprom") for s in specs), specs)
+        # 0.7.0 (S3): фьюзы и lock-биты читаются для диагностики (inspect) — только «:r:» и только с -n;
+        # пишутся по-прежнему лишь flash и eeprom.
+        fuse_reads = [a for a in self.calls("avrdude") if any(x.startswith(("lfuse", "hfuse", "efuse", "lock"))
+                                                              for x in a)]
+        self.assertTrue(all("-n" in a for a in fuse_reads), fuse_reads)
+        self.assertTrue(all(s.split(":")[0] in ("flash", "eeprom") or s.split(":")[1] == "r" for s in specs), specs)
+        self.assertTrue(all(s.split(":")[0] in ("flash", "eeprom") for s in specs if s.split(":")[1] == "w"), specs)
+        self.assertFalse((self.fake / "fuses_written").exists())
         self.assertFalse(any({"-u", "-F", "-D"} & set(a) for a in self.calls("avrdude")))
 
     def test_safemode_off_rejected(self):

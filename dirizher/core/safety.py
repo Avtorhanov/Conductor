@@ -3,13 +3,21 @@
 Запись разрешена только если выполнены ВСЕ условия:
   1. есть копия «до», подтверждённая повторным чтением;
   2. нет блокирующих находок диагностики;
-  3. напряжение чипа совместимо с адаптером;
+  3. напряжение чипа совместимо с адаптером (и с замером, если лезвие мерит напряжение цели);
   4. размер образа равен размеру чипа;
   5. профиль разрешает запись;
   6. не включён пробный режим (--dry-run);
   7. человек ввёл слово подтверждения.
 """
 from __future__ import annotations
+
+
+NO_POWER_V = 0.5          # ниже — «на цели нет питания»
+
+
+def volts(x) -> str:
+    """3.3 → «3,3», 3.241 → «3,24», 5.0 → «5»."""
+    return f"{float(x):.2f}".rstrip("0").rstrip(".").replace(".", ",")
 
 
 class Safety:
@@ -37,6 +45,28 @@ class Safety:
                              f"чтобы не повредить чип: нужен переходник на {v} В "
                              f"(и смените programmer_voltage в config.yaml — общий или у плагина).")
         return "ok", f"напряжение совместимо: чип {v} В, адаптер {pv} В"
+
+    def measured_check(self, profile, programmer_voltage: float, measured: float) -> tuple:
+        """Сверить ЗАМЕРЕННОЕ напряжение цели с профилем и адаптером: ("ok" | "block", сообщение).
+
+        Только добавляет запрет к voltage_check, никогда не разрешает то, что та запретила: ядро зовёт её
+        после voltage_check и лишь тогда, когда прежняя проверка не остановила сеанс."""
+        tol = float(self.cfg.get("voltage_tolerance", 0.3))
+        pv = float(programmer_voltage)
+        m = float(measured)
+        v = profile.voltage if profile is not None else None
+        if m < NO_POWER_V:
+            return "block", (f"замерено {volts(m)} В — на цели нет питания (или отладчик не видит вывод питания). "
+                             f"Подайте питание платы и проверьте провод VCC/VTref, затем запустите снова.")
+        if v is not None and abs(m - float(v)) > tol:
+            return "block", (f"замерено {volts(m)} В, а профиль на {volts(v)} В. Работа остановлена: "
+                             f"проверьте, тот ли выбран чип и та ли это плата (нужен профиль на {volts(m)} В "
+                             f"или переходник уровней).")
+        if abs(m - pv) > tol:
+            return "block", (f"замерено {volts(m)} В, а адаптер на {volts(pv)} В. Работа остановлена, чтобы не "
+                             f"повредить чип: проверьте питание цели (не просело ли, нет ли замыкания) и "
+                             f"напряжение адаптера (programmer_voltage) — они должны совпадать.")
+        return "ok", f"замер совпал: на цели {volts(m)} В"
 
     def write_blockers(self, *, verified: bool, findings: list, profile, image: bytes,
                        chip_size: int, dry_run: bool) -> list:
