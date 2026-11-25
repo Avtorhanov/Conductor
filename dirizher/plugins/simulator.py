@@ -24,6 +24,8 @@ class SimulatorPlugin(Plugin):
     title = "Симулятор: виртуальная SPI-флешка W25Q64 (8 МБ)"
     target_class = "memory.spi_nor"
     hardware = False
+    common_settings = ("enabled",)
+    settings_schema: list = []        # своих настроек нет
 
     SIZE = 8 * 1024 * 1024
     JEDEC = "EF4017"

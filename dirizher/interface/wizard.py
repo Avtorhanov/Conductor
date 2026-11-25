@@ -130,6 +130,8 @@ class Wizard:
             return self.show(int(params["session"]))
         if name in ("plugins", "profiles"):
             return self.device()
+        if name == "tool":
+            return self.tool(str(params.get("name") or ""))
         if name == "roadmap":
             return self.roadmap()
         if name == "builder":
@@ -392,7 +394,20 @@ class Wizard:
         ui.out()
         ui.info(f"адаптер: {s['programmer_voltage']} В; слово подтверждения: {s['confirm_word']}; "
                 f"зеркало копий: {info['mirror_dir'] or 'выключено'}")
-        ui.pause("Enter — назад…")
+        tools = [p for p in info["plugins"] if p["title"] != "ошибка загрузки"]
+        idx = ui.choose("Настроить инструмент? (Enter — назад)", [f"{p['name']} — {p['title']}" for p in tools])
+        if idx is None or not 0 <= idx < len(tools):
+            return None
+        return self.tool(tools[idx]["name"])
+
+    def tool(self, name: str):
+        """Настройки лезвия поле за полем; сохранение — config.tools.yaml через капот, со словом."""
+        from ..workshop import toolsettings
+        from ..workshop.hood import Hood
+        try:
+            toolsettings.ask_fields(self.cfg, Hood(self.cfg), self.ui, self.ask_text, name)
+        except toolsettings.ToolSettingsError as e:
+            self.ui.error(str(e))
         return None
 
     def roadmap(self):

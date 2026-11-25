@@ -17,6 +17,7 @@ from pathlib import Path
 
 from ..core.models import Detection
 from ..core.plugin import Plugin
+from ..core.settings import field
 from ._common import tool_version
 
 FOUND_RE = re.compile(r'Found (.+?) flash chip "(.+?)" \((\d+) kB, (\w+)\)')
@@ -29,6 +30,12 @@ class FlashromSPIPlugin(Plugin):
     title = "SPI-память через flashrom"
     target_class = "memory.spi_nor"
     hardware = True
+    common_settings = ("enabled", "programmer_voltage", "probe_timeout", "read_timeout", "write_timeout")
+    settings_defaults = {"probe_timeout": 120, "read_timeout": 900, "write_timeout": 1800}
+    settings_schema = [
+        field("programmer", "Программатор flashrom (-p)", default="ch341a_spi", example="ch341a_spi",
+              help="ch341a_spi; buspirate_spi:dev=/dev/ttyACM0; linux_spi:dev=/dev/spidev0.0,spispeed=8000"),
+    ]
 
     @property
     def programmer(self) -> str:

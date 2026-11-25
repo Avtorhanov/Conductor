@@ -394,6 +394,8 @@ textarea.editor[readonly] { opacity: .85; }
 .params .prow small { display: block; color: var(--muted); font-size: .8rem; }
 .params .prow .ro { text-align: right; font-family: var(--mono); }
 .params .prow.changed b { color: var(--accent); }
+.params .prow.volt { border-left: 4px solid var(--warn); padding-left: .5rem; background: var(--warn-bg); }
+.params .prow.volt small.vw { color: var(--warn); font-weight: 600; }
 .lvl { font-weight: 700; margin-right: .3rem; }
 .lvl.bad { color: var(--bad); } .lvl.warn { color: var(--warn); } .lvl.info { color: var(--muted); }
 /* ---------- справочник: движки и переходники ---------- */
@@ -768,6 +770,7 @@ const VIEW_ACTIONS = {
   hood: p => openPage(v => renderHood(v, p.area || S.tab)),
   doctor: () => openPage(renderDoctor),
   tune_form: p => openPage(v => renderTune(v, p.session)),
+  tool: p => openPage(v => renderTool(v, p.name)),
   fix: p => fixModal(p.session, p.fix),
   catalog: p => {
     if (p.card) return openPage(v => renderCard(v, p.card));
@@ -1387,7 +1390,10 @@ async function renderDevice(v) {
   conn.append(h("button", { class: "btn small", type: "button", onclick: () => go({ lesson: "displays" }) }, "Экраны, переходники, точка доступа Wi-Fi"));
 
   tools.append(h("h3", {}, "Инструменты"), h("div", { class: "list" }, d.plugins.map(p =>
-    h("div", { class: "item" }, (p.active ? "✔ " : "· ") + p.title, h("small", {}, p.name + (p.skill ? " (навык)" : "") + " — " + p.status)))));
+    h("div", { class: "item" }, (p.active ? "✔ " : "· ") + p.title, h("small", {}, p.name + (p.skill ? " (навык)" : "") + " — " + p.status),
+      (p.warnings || []).map(t => h("small", { class: "msg w" }, "⚠ " + t)),
+      p.title !== "ошибка загрузки" ? h("button", { class: "btn small", type: "button", "data-tool": p.name,
+        onclick: () => openPage(w => renderTool(w, p.name)) }, "Настроить") : null))));
   tools.append(h("h3", {}, "Профили (" + d.profiles.length + ")"), h("div", { class: "list" }, d.profiles.map(p =>
     h("div", { class: "item" }, p.name, h("small", {}, p.id + " · " + p.kind + " · " + (p.voltage ? p.voltage + " В" : "напряжение не указано") + (p.allow_write ? "" : " · только чтение"))))));
   for (const e of d.profile_errors) tools.append(h("div", { class: "msg e" }, e.file + ": " + e.error));
@@ -1398,6 +1404,84 @@ async function renderDevice(v) {
     h("dt", {}, "зеркало копий"), h("dd", {}, d.mirror_dir || "выключено"),
     h("dt", {}, "данные"), h("dd", { class: "mono" }, d.data_dir),
     h("dt", {}, "версия"), h("dd", {}, d.version)));
+}
+
+/* Прибор → Инструменты → лезвие → «Настроить»: поля по схеме лезвия, сохранение — config.tools.yaml через капот. */
+async function renderTool(v, name) {
+  const alive = liveCheck();
+  v.append(backBtn("Прибор"));
+  const card = h("section", { class: "card" }, h("h1", {}, "Настройки: " + name), h("p", { class: "muted" }, "Загружаю…"));
+  v.append(card);
+  let d;
+  try { d = await api("/api/tool?name=" + encodeURIComponent(name)); } catch (e) { card.lastChild.textContent = e.message; return; }
+  if (!alive()) return;
+  card.textContent = "";
+  const statusBox = h("div", {});
+  const showStatus = st => { statusBox.textContent = ""; if (st) statusBox.append(h("div", { class: "msg " + (st.active ? "h" : "w") }, (st.active ? "✔ " : "· ") + "Статус: " + st.status)); };
+  card.append(h("h1", {}, d.title), h("p", { class: "muted" }, d.name + (d.skill ? " · навык " + d.skill : "") +
+    " · сохраняется в " + d.tools_file + " (config.yaml не меняется; прежние версии — в истории капота)"), statusBox, hoodBanner(d.hood, () => replacePage(w => renderTool(w, name))));
+  showStatus(d.status);
+  [].concat(d.unknown, d.type_errors).forEach(t => card.append(h("div", { class: "msg w" }, "⚠ " + t)));
+  const wanted = {};
+  const box = h("div", { class: "params" });
+  for (const f of d.fields) {
+    const row = h("div", { class: "prow" + (f.safety === "voltage" ? " volt" : ""), "data-key": f.key });
+    const from = "сейчас: " + (f.shown || (f.key === "programmer_voltage" && f.default_shown ? "общее " + f.default_shown + " В" : "не задано")) + " · " + f.source_title;
+    const hints = [from, f.example_shown ? "пример: " + f.example_shown : "", f.help].filter(Boolean).join(" · ");
+    const label = h("div", {}, h("b", {}, f.title + (f.required ? " *" : "")), h("small", { class: "mono" }, f.key + " · " + f.type_title), h("small", {}, hints),
+      f.safety === "voltage" ? h("small", { class: "vw" }, "⚡ Влияет на напряжение: неверное значение может сжечь чип. Сохраняется только со словом «" + d.hood.word + "».") : null);
+    let ctl;
+    const initial = f.type === "bool" ? (f.value ? "true" : "false") : (f.shown || "");
+    if (f.type === "bool") {
+      ctl = h("select", { class: "in" }, h("option", { value: "true" }, "да"), h("option", { value: "false" }, "нет"));
+    } else if (f.type === "choice") {
+      ctl = h("select", { class: "in" }, h("option", { value: "" }, "— по умолчанию —"), (f.choices || []).map(c => h("option", { value: String(c) }, String(c))));
+    } else {
+      ctl = h("input", { class: "in", type: "text", placeholder: f.example_shown || f.default_shown || "",
+        inputmode: (f.type === "int" || f.type === "float") ? "decimal" : "text", autocapitalize: "off", spellcheck: "false" });
+    }
+    ctl.value = initial;
+    ctl.addEventListener("input", () => {
+      const val = ctl.value.trim();
+      if (val !== initial) wanted[f.key] = val; else delete wanted[f.key];
+      row.classList.toggle("changed", f.key in wanted);
+    });
+    ctl.addEventListener("change", () => ctl.dispatchEvent(new Event("input")));
+    row.append(label, ctl); box.append(row);
+  }
+  const out = h("div", {});
+  const showRes = r => {
+    out.textContent = "";
+    (r.changes || []).forEach(c => out.append(h("div", { class: "msg " + (c.safety === "voltage" ? "w" : "h") }, (c.safety === "voltage" ? "⚡ " : "") + c.title + ": " + c.before + " → " + c.after)));
+    (r.errors || []).forEach(t => out.append(h("div", { class: "msg e" }, t)));
+    (r.warnings || []).forEach(t => out.append(h("div", { class: "msg w" }, t)));
+    if (r.status) showStatus(r.status);
+  };
+  const checkBtn = h("button", { class: "btn", type: "button" }, "Проверить");
+  const saveBtn = h("button", { class: "btn primary", type: "button" }, "Сохранить…");
+  checkBtn.addEventListener("click", async () => {
+    if (!Object.keys(wanted).length) return toast("Ничего не изменено", "bad");
+    checkBtn.disabled = true;
+    try { const r = await api("/api/tool/check", { json: { name, values: wanted } }); showRes(r); if (!(r.errors || []).length) out.append(h("div", { class: "msg h" }, "Проверка пройдена — ничего не записано.")); }
+    catch (e) { out.textContent = ""; out.append(h("div", { class: "msg e" }, e.message)); }
+    checkBtn.disabled = false;
+  });
+  saveBtn.addEventListener("click", async () => {
+    if (!Object.keys(wanted).length) return toast("Ничего не изменено", "bad");
+    const volt = d.fields.some(f => f.safety === "voltage" && f.key in wanted);
+    const word = await promptText("Слово подтверждения", (volt ? "Меняется напряжение адаптера — проверьте переходник. " : "") +
+      "Настройки инструментов влияют на работу с железом. Введите «" + d.hood.word + "», чтобы сохранить.", d.hood.word);
+    if (word === null) return;
+    saveBtn.disabled = true;
+    try {
+      const r = await api("/api/tool/save", { json: { name, values: wanted, word } });
+      showRes(r);
+      if (r.ok) { toast("Сохранено"); replacePage(w => renderTool(w, name)); return; }
+    } catch (e) { out.textContent = ""; out.append(h("div", { class: "msg e" }, e.message)); }
+    saveBtn.disabled = false;
+  });
+  card.append(box, h("p", { class: "muted", style: "font-size:.85rem" }, "Пустое поле — убрать значение из " + d.tools_file + " (вернётся из config.yaml или по умолчанию). * — обязательное."),
+    h("div", { class: "row", style: "margin-top:.6rem" }, checkBtn, saveBtn), out);
 }
 
 function setScale(x) {

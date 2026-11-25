@@ -66,6 +66,8 @@ ACTIONS = {
     "catalog": {"job": False, "params": {"card", "kind"}, "title": "Справочник"},
     # 0.6.0 — учебная площадка (тренажёр по маршрутам: ноутбук, ТВ, телефон, машина, связки)
     "playground": {"job": False, "params": {"track"}, "title": "Учебная площадка"},
+    # 0.7.0 — настройки инструмента формой (config.tools.yaml через капот)
+    "tool": {"job": False, "params": {"name"}, "title": "Настроить инструмент"},
 }
 PICK_PURPOSES = ("rollback", "feedback", "reference", "export")
 LESSON_GROUPS = ("work", "dev")

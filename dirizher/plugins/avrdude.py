@@ -28,6 +28,7 @@ from pathlib import Path
 
 from ..core.models import Detection
 from ..core.plugin import Plugin
+from ..core.settings import field
 from ._common import as_int, extra_args, fail_text, guard, tool_version
 
 FORBIDDEN = ["-u", "-F", "-D", "-e", "-t", "-U"]
@@ -44,6 +45,16 @@ class AvrdudePlugin(Plugin):
     title = "Микроконтроллеры AVR через avrdude"
     target_class = "mcu.avr"
     hardware = True
+    settings_schema = [
+        field("programmer", "Программатор (-c)", default="usbasp", example="usbasp"),
+        field("part", "Микроконтроллер (-p)", required=True, example="m328p"),
+        field("port", "Порт (-P)", "port", example="/dev/ttyUSB0", help="Для arduino и serialupdi."),
+        field("bitclock", "Медленнее такт (-B)", "int", example=10, help="Медленнее — надёжнее на «тихих» МК."),
+        field("memories", "Что читать", "list", default=["flash", "eeprom"], example=["flash", "eeprom"],
+              help="flash и/или eeprom. Фьюзы и lock-биты не трогаются никогда."),
+        field("flash_size", "Размер flash, байт", "int", example=32768),
+        field("eeprom_size", "Размер EEPROM, байт", "int", example=1024),
+    ]
 
     def __init__(self, conductor, settings=None):
         super().__init__(conductor, settings)

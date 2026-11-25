@@ -6,7 +6,8 @@
     испорченная или пропавшая восстанавливается из исправного места, испорченный файл — в карантин;
   * правки из капота, после которых профиль, навык, лезвие или Штурман перестали загружаться, —
     возврат последней рабочей версии из истории капота (это тоже правка с историей).
-Только сообщает: память SQLite (integrity_check), место на диске, недоступные инструменты.
+Только сообщает: память SQLite (integrity_check), место на диске, недоступные инструменты,
+опечатки и неверные типы в настройках лезвий (по их схемам), probe_rs и openocd включены вместе.
 
 Запуск:  python3 -m dirizher doctor          — проверить
          python3 -m dirizher doctor --heal   — проверить и исправить то, что исправляется
@@ -126,6 +127,19 @@ def check(cfg: dict, sim: bool = False, deep: bool = True, hood: Hood | None = N
             elif row["status"].startswith("недоступен"):
                 issues.append(_issue(f"tool:{row['name']}", "warn", f"{row['title']}: инструмент недоступен",
                                      row["status"]))
+            if row.get("warnings"):
+                issues.append(_issue(f"settings:{row['name']}", "warn", f"Настройки лезвия {row['name']}",
+                                     "; ".join(row["warnings"]) + " · исправьте: «Прибор» → «Инструменты» → "
+                                     f"«Настроить» или python3 -m dirizher tool {row['name']}"))
+        if cfg.get("_tools_error"):
+            issues.append(_file_issue(hood, "config.tools.yaml", "Настройки инструментов не загружены",
+                                      cfg["_tools_error"]))
+        plugins = cfg.get("plugins") or {}
+        both = [n for n in ("probe_rs", "openocd") if (plugins.get(n) or {}).get("enabled")]
+        if len(both) == 2:
+            issues.append(_issue("conflict:probe_rs+openocd", "warn", "Включены и probe_rs, и openocd",
+                                 "оба берут один отладчик и один МК — оставьте одно лезвие "
+                                 "(«Прибор» → «Инструменты» → «Настроить» → «Включено»)"))
         # 6. Штурман
         from ..interface import guide
         try:

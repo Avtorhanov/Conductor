@@ -24,6 +24,8 @@ def cmd_plugins(c, a):
         mark = "✔" if row["active"] else "·"
         c.ui.out(f" {mark} {row['name']:<14} {row['title']}")
         c.ui.out(f"      {row['status']}")
+        for t in row.get("warnings") or []:
+            c.ui.warn(f"     {t}")
     if c.sim:
         c.ui.info("(режим --sim: работают только виртуальные плагины)")
 
@@ -188,6 +190,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("wizard", help="пошаговый мастер в терминале (SSH, консоль, маленький экран)")
 
     sub.add_parser("plugins", help="какие инструменты подключены")
+    tl = sub.add_parser("tool", help="настройки инструмента (лезвия): посмотреть, включить, изменить")
+    tl.add_argument("name", nargs="?", help="имя лезвия (без имени — список)")
+    tl.add_argument("--set", action="append", metavar="ключ=значение", help="новое значение (можно несколько)")
+    tl.add_argument("--check", action="store_true", help="только проверить, ничего не записывать")
     sub.add_parser("profiles", help="какие профили загружены")
     sub.add_parser("detect", help="только опознать, что подключено")
 
@@ -345,6 +351,9 @@ def main(argv=None) -> int:
         return cmd_catalog(cfg, args.card, args.kind)
     if args.cmd == "playground":
         return cmd_playground(args.track, args.export)
+    if args.cmd == "tool":
+        from .workshop import toolsettings
+        return toolsettings.cli(cfg, args.name, args.set or [], args.check, ConsoleUI())
     ui = ConsoleUI()
     c = Conductor(cfg, ui, sim=args.sim, dry_run=getattr(args, "dry_run", False))
     try:

@@ -27,6 +27,7 @@ from pathlib import Path
 
 from ..core.models import Detection
 from ..core.plugin import Plugin
+from ..core.settings import field
 from ._common import as_int
 
 HELPER = Path(__file__).resolve().parent.parent / "helpers" / "bp5_i2c.py"
@@ -39,6 +40,17 @@ class BusPirateI2CPlugin(Plugin):
     title = "I2C EEPROM 24Cxx через Bus Pirate 5"
     target_class = "memory.i2c_eeprom"
     hardware = True
+    common_settings = ("enabled", "programmer_voltage", "probe_timeout", "read_timeout", "write_timeout")
+    settings_defaults = {"probe_timeout": 30, "read_timeout": 600, "write_timeout": 1200}
+    settings_schema = [
+        field("port", "Порт Bus Pirate", "port", default="/dev/ttyACM0", example="/dev/ttyACM0"),
+        field("eeprom", "Микросхема", required=True, example="24C02", help="24C01 … 24C512"),
+        field("address", "Адрес I2C", "int", default=0x50, example=0x50, hex=True),
+        field("psu_voltage", "Питание чипа от BP5, В", "float", default=3.3, example=3.3, safety="voltage",
+              help="BP5 питает чип этим напряжением; 0 — питание от платы (тогда задайте напряжение адаптера)."),
+        field("pullups", "Подтяжки шины", "bool", default=True),
+        field("command_timeout", "Ожидание ответа BP5, с", "float", default=3),
+    ]
 
     def __init__(self, conductor, settings=None):
         super().__init__(conductor, dict(settings or {}))

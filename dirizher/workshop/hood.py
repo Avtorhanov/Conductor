@@ -7,6 +7,8 @@
   лезвия (dirizher/plugins/*.py — кроме общих помощников _common.py и учебного симулятора).
 Только смотреть:
   ядро (dirizher/core/**) — порядок работы и защита; config.yaml; интерфейсы; помощники-процессы.
+Настройки инструментов (config.tools.yaml, секция plugins:) — правятся: проверка по схемам лезвий,
+слово «ДА» (влияют на железо). Удобнее — формой «Прибор → Инструменты → Настроить».
   Их меняют через git с тестами (PRINCIPLES.md, п. 1–4 и 11).
 
 Сохранение = проверка → прежняя версия в историю → атомарная запись → новая версия в историю.
@@ -38,8 +40,10 @@ GUIDE = "dirizher/interface/guide.yaml"
 PLAYGROUND = "dirizher/interface/playground.yaml"
 CORE_REASON = "ядро: порядок работы и защита — меняется только через git с тестами (PRINCIPLES.md, п. 1–4)"
 SERVICE_REASON = "служебный код — меняется через git с тестами"
+TOOLS = "config.tools.yaml"
 VIEW_REASONS = {
-    "config.yaml": "настройки прибора — правятся на самом приборе (там же открывается капот)",
+    "config.yaml": "настройки прибора — правятся на самом приборе; инструменты — формой «Прибор → Инструменты» "
+                   "(она пишет config.tools.yaml)",
     "dirizher/plugins/_common.py": "общий сторож лезвий (запрет опасных параметров) — только через git с тестами",
     "dirizher/plugins/simulator.py": "учебный симулятор — эталон для автотестов, только через git",
     "dirizher/plugins/__init__.py": SERVICE_REASON,
@@ -51,7 +55,7 @@ AREAS = {
                         "dirizher/core/checks.py"]),
     "log": ("Журнал", ["dirizher/core/memory.py", "dirizher/core/learning.py", "dirizher/core/storage.py"]),
     "dev": ("Навыки", ["skills/**/*", "profiles/**/*.yaml", "dirizher/core/skills.py"]),
-    "device": ("Прибор", ["config.yaml", "dirizher/plugins/*.py", "dirizher/helpers/*.py"]),
+    "device": ("Прибор", ["config.yaml", TOOLS, "dirizher/plugins/*.py", "dirizher/helpers/*.py"]),
     "help": ("Справка", ["help/*.md"]),
     "catalog": ("Справочник", ["catalog/**/*.yaml", "skills/*/catalog/*.yaml", "dirizher/workshop/catalog.py"]),
 }
@@ -100,7 +104,7 @@ def classify(rel: str) -> tuple:
         return "edit", ""
     if parts[0] == "catalog" and pp.suffix in (".yaml", ".yml"):
         return "edit", ""
-    if rel in (GUIDE, PLAYGROUND):
+    if rel in (GUIDE, PLAYGROUND, TOOLS):
         return "edit", ""
     if rel in VIEW_REASONS:
         return "view", VIEW_REASONS[rel]
@@ -258,7 +262,14 @@ class Hood:
                                      + (f" (строка {mark.line + 1})" if mark else ""))
                 return res
             from .catalog import check_text, is_card_path
-            if rel == GUIDE:
+            if rel == TOOLS:
+                from . import toolsettings
+                p = self.root / TOOLS
+                old = p.read_text(encoding="utf-8") if p.is_file() else None
+                out = toolsettings.check_text(self.cfg, self.root, text, old)
+                for key in ("errors", "warnings", "hints"):
+                    res[key] += out[key]
+            elif rel == GUIDE:
                 from ..interface import guide
                 res["errors"] += guide.validate(data)
             elif rel == PLAYGROUND:

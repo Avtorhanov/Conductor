@@ -25,6 +25,7 @@ from pathlib import Path
 
 from ..core.models import Detection
 from ..core.plugin import Plugin
+from ..core.settings import field
 from ._common import as_int, fail_text, guard, tool_version
 
 FORBIDDEN_WORDS = ["unlock", "lock", "mass_erase", "protect", "option_write", "options_write",
@@ -40,6 +41,17 @@ class OpenOCDPlugin(Plugin):
     title = "Микроконтроллеры через OpenOCD (SWD/JTAG)"
     target_class = "mcu.arm"
     hardware = True
+    settings_schema = [
+        field("interface", "Файл интерфейса OpenOCD", "path", required=True, example="interface/stlink.cfg"),
+        field("target", "Файл цели OpenOCD", "path", required=True, example="target/stm32f1x.cfg"),
+        field("mcu", "Модель МК", required=True, example="STM32F103C8", help="По этому имени выбирается профиль."),
+        field("flash_base", "Начало flash", "int", default=0x08000000, example=0x08000000, hex=True),
+        field("flash_size", "Размер flash, байт", "int", required=True, example=65536),
+        field("pre_init", "Команды до init", "list", example=["adapter speed 1000"],
+              help="Через запятую или пробел; каждая — команда OpenOCD."),
+        field("halt_cmd", "Команда остановки", default="reset halt", example="halt"),
+        field("target_class", "Класс цели", default="mcu.arm", example="mcu.arm"),
+    ]
 
     def __init__(self, conductor, settings=None):
         super().__init__(conductor, settings)

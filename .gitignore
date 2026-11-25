@@ -5,3 +5,6 @@ __pycache__/
 *.pyc
 _site/
 dirizher_code.txt
+
+# Настройки инструментов из формы «Прибор → Инструменты» — свои у каждого прибора.
+config.tools.yaml

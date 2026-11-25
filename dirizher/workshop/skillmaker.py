@@ -53,6 +53,7 @@ from pathlib import Path
 
 from dirizher.core.models import Detection
 from dirizher.core.plugin import Plugin
+from dirizher.core.settings import field
 
 HELPER = Path(__file__).with_name("helper.py")      # свой помощник-процесс, если понадобится
 
@@ -62,6 +63,11 @@ class {cls}Plugin(Plugin):
     title = "{title}"
     target_class = "device.{id}"
     hardware = True
+    # Поля настроек: по ним строится форма «Прибор → Инструменты → Настроить» и ловятся опечатки.
+    common_settings = ("enabled", "probe_timeout", "read_timeout", "write_timeout")
+    settings_schema = [
+        field("port", "Порт", "port", example="/dev/ttyUSB0", help="Куда подключён переходник."),
+    ]
 
     def available(self) -> tuple:
         port = str(self.settings.get("port") or "")

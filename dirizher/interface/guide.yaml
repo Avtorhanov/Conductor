@@ -195,7 +195,7 @@ nodes:
 
   tools:
     ask: Что подключаете?
-    say: Каждый инструмент — отдельное «лезвие». Новые выключены, пока вы не включите их в config.yaml. Порядок первого раза везде один — опознание, план без записи, эталон с исправного устройства.
+    say: Каждый инструмент — отдельное «лезвие». Новые выключены, пока вы не включите их — «Прибор» → «Инструменты» → «Настроить» (или в config.yaml). Порядок первого раза везде один — опознание, план без записи, эталон с исправного устройства.
     options:
       - label: Какой переходник нужен — карточки с рисунками
         explain: что купить, как подключить, какие выводы куда
@@ -307,7 +307,7 @@ lessons:
       - Подключите BP5 по USB — он появится как /dev/ttyACM0. Права — группа dialout (один раз, затем перелогиниться).
       - text: Прищепка или провода к микросхеме — SDA, SCL, GND и VCC от BP5. Вывод WP (7) на время записи — к GND.
         code: sudo usermod -aG dialout $USER
-      - text: Включите лезвие в config.yaml (образец — docs/config-snippet-0.3.0.yaml). Модель — как на корпусе.
+      - text: Включите лезвие — «Прибор» → «Инструменты» → bp5_i2c → «Настроить» (или в config.yaml, образец — docs/config-snippet-0.3.0.yaml). Модель — как на корпусе.
         code: |
           plugins:
             bp5_i2c:
@@ -320,6 +320,9 @@ lessons:
       - Затем «Снять копию с исправного устройства». Формат ответов BP5 проверен только на эмуляторе (ПРОВЕРИТЬ НА ЖЕЛЕЗЕ).
     check: Журнал сеанса — строки помощника bp5_i2c (FOUND, READ 256). Если микросхема молчит — проверьте подтяжки и питание.
     related:
+      - label: Настроить bp5_i2c (форма, без правки config.yaml)
+        action: tool
+        params: {name: bp5_i2c}
       - label: "Схема подключения Bus Pirate 5"
         action: catalog
         params: {card: bus_pirate5}
@@ -349,6 +352,12 @@ lessons:
       - Если чтение не проходит из-за защиты (RDP) — Дирижёр её не снимает. Снятие стирает прошивку, а обход защит — вне задач проекта.
     check: «Узнать, что за микросхема» → «модель из настроек, Cortex-M3». Форматы вывода — ПРОВЕРИТЬ НА ЖЕЛЕЗЕ.
     related:
+      - label: Настроить probe_rs (форма, без правки config.yaml)
+        action: tool
+        params: {name: probe_rs}
+      - label: Настроить openocd (форма, без правки config.yaml)
+        action: tool
+        params: {name: openocd}
       - label: "Схема подключения ST-Link"
         action: catalog
         params: {card: st_link_v2}
@@ -372,7 +381,7 @@ lessons:
           sudo cp system/99-dirizher-tools.rules /etc/udev/rules.d/ && sudo udevadm control --reload-rules
       - text: Точное имя микросхемы — из списка minipro.
         code: minipro -L W25Q64
-      - text: Впишите его в config.yaml. Класс (SPI, I2C, параллельная) Дирижёр определит по имени.
+      - text: Впишите его — «Прибор» → «Инструменты» → minipro → «Настроить» (или в config.yaml). Класс (SPI, I2C, параллельная) Дирижёр определит по имени.
         code: |
           plugins:
             minipro:
@@ -381,6 +390,9 @@ lessons:
       - Микроконтроллеры через minipro Дирижёр не обслуживает — стирание заденет EEPROM и фьюзы.
     check: «Узнать, что за микросхема» → ID из панельки. Текст minipro — ПРОВЕРИТЬ НА ЖЕЛЕЗЕ.
     related:
+      - label: Настроить minipro (форма, без правки config.yaml)
+        action: tool
+        params: {name: minipro}
       - label: "Карточка T48 / TL866II+"
         action: catalog
         params: {card: t48}
@@ -410,6 +422,9 @@ lessons:
       - Подпись 0x000000 или 0xFFFFFF — нет связи — проверьте RESET, питание и кварц; попробуйте bitclock 10.
     check: «Узнать, что за микросхема» → «подпись 0x1E950F». Строку avrdude — ПРОВЕРИТЬ НА ЖЕЛЕЗЕ.
     related:
+      - label: Настроить avrdude (форма, без правки config.yaml)
+        action: tool
+        params: {name: avrdude}
       - label: "Схема подключения USBasp"
         action: catalog
         params: {card: usbasp}
@@ -438,6 +453,9 @@ lessons:
       - В отпечаток входит MAC — откат возможен только на ту же плату. При шифровании флеша эталон с другой платы не поможет.
     check: «Узнать, что за микросхема» → чип, MAC и размер флеша. Строки esptool — ПРОВЕРИТЬ НА ЖЕЛЕЗЕ.
     related:
+      - label: Настроить esptool (форма, без правки config.yaml)
+        action: tool
+        params: {name: esptool}
       - label: "Схема подключения USB-UART"
         action: catalog
         params: {card: usb_uart}

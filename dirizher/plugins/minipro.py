@@ -29,6 +29,7 @@ from pathlib import Path
 
 from ..core.models import Detection
 from ..core.plugin import Plugin
+from ..core.settings import field
 from ._common import extra_args, fail_text, guard, tool_version
 
 FORBIDDEN = ["-y", "--no_id_error", "-s", "--no_size_error", "-S", "--no_size_warning", "-v",
@@ -59,6 +60,12 @@ class MiniproPlugin(Plugin):
     title = "Память в панельке через T48 / TL866II+ (minipro)"
     target_class = "memory.parallel"
     hardware = True
+    settings_defaults = {"probe_timeout": 60, "read_timeout": 900, "write_timeout": 1800}
+    settings_schema = [
+        field("device", "Тип микросхемы (minipro -L)", required=True, example="AT24C02"),
+        field("target_class", "Класс цели", example="memory.i2c_eeprom",
+              help="Обычно определяется по имени сам."),
+    ]
 
     def __init__(self, conductor, settings=None):
         super().__init__(conductor, settings)

@@ -27,6 +27,7 @@ from pathlib import Path
 
 from ..core.models import Detection
 from ..core.plugin import Plugin
+from ..core.settings import field
 from ._common import extra_args, fail_text, guard, parse_size
 
 FORBIDDEN = ["--encrypt", "--encrypt-files", "--encrypt_files", "--force",
@@ -50,6 +51,14 @@ class EsptoolPlugin(Plugin):
     title = "ESP8266/ESP32 через esptool (USB-UART)"
     target_class = "mcu.esp"
     hardware = True
+    settings_defaults = {"probe_timeout": 60, "read_timeout": 900, "write_timeout": 1800}
+    settings_schema = [
+        field("port", "Порт", "port", default="/dev/ttyUSB0", example="/dev/ttyUSB0"),
+        field("baud", "Скорость, бод", "int", default=460800, example=460800),
+        field("chip", "Чип", default="auto", example="esp32", help="auto — esptool узнает сам."),
+        field("cmd", "Программа", example="esptool.py", help="Пусто — esptool, если есть, иначе esptool.py."),
+        field("target_class", "Класс цели", default="mcu.esp", example="mcu.esp"),
+    ]
 
     def __init__(self, conductor, settings=None):
         super().__init__(conductor, settings)

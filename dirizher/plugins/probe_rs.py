@@ -25,6 +25,7 @@ from pathlib import Path
 
 from ..core.models import Detection
 from ..core.plugin import Plugin
+from ..core.settings import field
 from ._common import as_int, extra_args, fail_text, guard, parse_hex_bytes, tool_version
 
 FORBIDDEN = ["--allow-erase-all", "--chip-erase", "erase"]
@@ -39,6 +40,17 @@ class ProbeRsPlugin(Plugin):
     title = "Микроконтроллеры ARM/RISC-V через probe-rs (SWD/JTAG)"
     target_class = "mcu.arm"
     hardware = True
+    settings_schema = [
+        field("chip", "Чип (имя из probe-rs chip list)", required=True, example="STM32F103C8",
+              help="Модель МК по SWD надёжно не узнать — укажите её сами."),
+        field("protocol", "Протокол", "choice", default="swd", choices=["swd", "jtag"]),
+        field("flash_base", "Начало flash", "int", default=0x08000000, example=0x08000000, hex=True),
+        field("flash_size", "Размер flash, байт", "int", required=True, example=65536),
+        field("probe", "Отладчик (VID:PID)", example="0483:3748",
+              help="Если подключено несколько отладчиков."),
+        field("speed", "Скорость, кГц", "int", example=1000),
+        field("target_class", "Класс цели", default="mcu.arm", example="mcu.arm"),
+    ]
 
     def __init__(self, conductor, settings=None):
         super().__init__(conductor, settings)

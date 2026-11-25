@@ -942,6 +942,46 @@ def api_catalog_new(h: Handler, q):
     h.send_json({"ok": True, "id": cid, "open": rel})
 
 
+# ======================= прибор: настройки инструментов =======================
+@route("GET", "/api/tool")
+def api_tool(h: Handler, q):
+    from ..workshop import toolsettings
+    name = q.get("name", "")
+    try:
+        desc = toolsettings.describe(h.app.cfg, name, h.app.hood.root)
+    except toolsettings.ToolSettingsError as e:
+        return h.fail(404, str(e))
+    desc["status"] = toolsettings.status_with(h.app.cfg, name)
+    desc["hood"] = hood_state(h)
+    h.send_json(desc)
+
+
+@route("POST", "/api/tool/check")
+def api_tool_check(h: Handler, q):
+    from ..workshop import toolsettings
+    body = h.read_json()
+    try:
+        res = toolsettings.check(h.app.cfg, h.app.hood, str(body.get("name") or ""), body.get("values") or {})
+    except toolsettings.ToolSettingsError as e:
+        return h.fail(400, str(e))
+    h.send_json(res)
+
+
+@route("POST", "/api/tool/save")
+def api_tool_save(h: Handler, q):
+    from ..workshop import toolsettings
+    need_hood(h)
+    if h.app.busy():
+        raise Busy("идёт задание — настройки инструментов после его окончания")
+    body = h.read_json()
+    try:
+        res = toolsettings.save(h.app.cfg, h.app.hood, str(body.get("name") or ""), body.get("values") or {},
+                                body.get("word"), actor(h))
+    except toolsettings.ToolSettingsError as e:
+        return h.fail(400, str(e))
+    h.send_json(res)
+
+
 # ======================= мастерская: самопроверка =======================
 @route("GET", "/api/doctor")
 def api_doctor(h: Handler, q):
