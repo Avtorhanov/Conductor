@@ -14,6 +14,7 @@ import os
 import random
 import zlib
 
+from .. import __version__
 from ..core.models import Detection
 from ..core.plugin import Plugin
 
@@ -63,6 +64,9 @@ class SimulatorPlugin(Plugin):
     # ---------- интерфейс плагина ----------
     def available(self) -> tuple:
         return True, "виртуальное устройство (железо не используется)"
+
+    def version(self):
+        return f"встроенный {__version__}"
 
     def probe(self):
         self._ensure()

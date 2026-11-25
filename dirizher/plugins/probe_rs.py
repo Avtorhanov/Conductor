@@ -25,7 +25,7 @@ from pathlib import Path
 
 from ..core.models import Detection
 from ..core.plugin import Plugin
-from ._common import as_int, extra_args, fail_text, guard, parse_hex_bytes
+from ._common import as_int, extra_args, fail_text, guard, parse_hex_bytes, tool_version
 
 FORBIDDEN = ["--allow-erase-all", "--chip-erase", "erase"]
 PROBE_LINE_RE = re.compile(r"^\s*\[\d+\]:\s*(.+)$", re.MULTILINE)
@@ -80,6 +80,10 @@ class ProbeRsPlugin(Plugin):
             return False, "укажите chip и flash_size в config.yaml → plugins: probe_rs"
         return True, f"чип из настроек: {self.chip}, флеш {self.flash_size // 1024} КБ @ 0x{self.flash_base:08X}"
 
+    def version(self):
+        # ПРОВЕРИТЬ НА ЖЕЛЕЗЕ: `probe-rs --version` печатает «probe-rs 0.24.0 (git commit: …)».
+        return tool_version(self, ["probe-rs", "--version"], r"probe-rs\s+v?(\d+\.\d+[\w.+-]*)")
+
     def probe(self):
         listing = self.run(guard("probe-rs", ["probe-rs", "list"], FORBIDDEN), timeout=30)
         probes = PROBE_LINE_RE.findall(listing.out + "\n" + listing.err)
@@ -105,7 +109,8 @@ class ProbeRsPlugin(Plugin):
 
     def read(self, det) -> bytes:
         res = self.run(self._cmd("read", "b8", f"0x{self.flash_base:08X}", self.flash_size),
-                       timeout=int(self.settings.get("read_timeout", 600)))
+                       timeout=int(self.settings.get("read_timeout", 600)),
+                       keep_output=False)          # в stdout — дамп: в журнал разработки не попадает
         if not res.ok:
             raise RuntimeError(fail_text(res, "probe-rs не смог прочитать флеш"))
         data = parse_hex_bytes(res.out)

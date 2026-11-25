@@ -103,3 +103,17 @@ def parse_hex_bytes(text: str) -> bytes:
         if values:
             out.extend(values)
     return bytes(out)
+
+
+def tool_version(plugin, cmd: list, pattern: str, timeout: int = 20):
+    """Версия программы: запустить cmd (только печать версии) и взять первое совпадение pattern.
+
+    Возвращает строку («1.3.0») или None. Ошибки не роняют сеанс: версия — сведение для журнала.
+    Точные команды и форматы версий — ПРОВЕРИТЬ НА ЖЕЛЕЗЕ (заданы по документации).
+    """
+    try:
+        res = plugin.run(cmd, timeout=timeout)
+    except Exception:
+        return None
+    m = re.search(pattern, (res.out or "") + "\n" + (res.err or ""), re.IGNORECASE | re.MULTILINE)
+    return m.group(1) if m else None

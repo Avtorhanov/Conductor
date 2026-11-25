@@ -28,7 +28,7 @@ from pathlib import Path
 
 from ..core.models import Detection
 from ..core.plugin import Plugin
-from ._common import as_int, extra_args, fail_text, guard
+from ._common import as_int, extra_args, fail_text, guard, tool_version
 
 FORBIDDEN = ["-u", "-F", "-D", "-e", "-t", "-U"]
 SIG_RE = re.compile(r"device signature\s*=\s*(?:0x)?([0-9a-f]{2})\s*([0-9a-f]{2})\s*([0-9a-f]{2})",
@@ -79,6 +79,11 @@ class AvrdudePlugin(Plugin):
             return False, "укажите в config.yaml → plugins: avrdude: " + ", ".join(missing)
         return True, (f"{self.settings.get('programmer', 'usbasp')} → {self.settings['part']}, "
                       f"образ: {' + '.join(self.memories)}")
+
+    def version(self):
+        # ПРОВЕРИТЬ НА ЖЕЛЕЗЕ: у avrdude нет отдельной команды версии; `avrdude -?` печатает справку
+        # и строку «avrdude version 7.1, …» (в 8.x — так же). Ничего не подключает и не пишет.
+        return tool_version(self, ["avrdude", "-?"], r"avrdude version\s+v?(\d+\.\d+[\w.+-]*)")
 
     def probe(self):
         res = self.run(self._base() + ["-n"], timeout=int(self.settings.get("probe_timeout", 60)))

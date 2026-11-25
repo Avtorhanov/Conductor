@@ -135,11 +135,42 @@ def cmd_sim(c, a):
     c.ui.ok(getattr(sim, f"do_{a.action}")())
 
 
+def cmd_journal(c, a):
+    """Пакет журнала для разработки: без дампов, без MAC, серийников, имени хоста и домашних путей."""
+    import json
+
+    from .core import journal
+
+    b = journal.bundle(c, a.session)
+    if b is None:
+        c.ui.error(f"нет сеанса №{a.session}")
+        return 1
+    c.ui.header(f"Журнал для разработки — сеанс №{a.session}")
+    tools = ", ".join(f"{t['plugin']} {t['version'] or '(версия не определена)'}" for t in b["tools"]) or "—"
+    c.ui.info(f"итог: {b['session'].get('outcome') or 'не завершён'}; инструменты: {tools}")
+    c.ui.info(f"команд: {len(b['commands'])}; событий: {len(b['events'])}; дампов в пакете нет")
+    sc = b["scrubbed"]
+    c.ui.info(f"заменено: MAC — {sc['mac']}, серийных — {sc['serial']}, имя хоста — {sc['host']}, "
+              f"домашних путей — {sc['home']}")
+    if not a.to:
+        c.ui.info("чтобы сохранить файл: " + c._cli(f"journal {a.session} --to {journal.filename(a.session, c.sim)}"))
+        return 0
+    dest = Path(a.to)
+    if dest.exists():
+        c.ui.error(f"файл {dest} уже есть — выберите другое имя (чужие файлы не переписываются)")
+        return 1
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with open(dest, "x", encoding="utf-8") as f:
+        json.dump(b, f, ensure_ascii=False, indent=1)
+    c.ui.ok(f"сохранено: {dest}. Передайте файл разработчику; тест из него: python3 tools/log_to_test.py {dest}")
+    return 0
+
+
 COMMANDS = {
     "plugins": cmd_plugins, "profiles": cmd_profiles, "detect": cmd_detect, "run": cmd_run,
     "history": cmd_history, "show": cmd_show, "feedback": cmd_feedback, "reference": cmd_reference,
     "rollback": cmd_rollback, "export": cmd_export, "sim": cmd_sim,
-    "params": cmd_params, "tune": cmd_tune, "skills": cmd_skills,
+    "params": cmd_params, "tune": cmd_tune, "skills": cmd_skills, "journal": cmd_journal,
 }
 
 
@@ -170,6 +201,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("show", help="подробности сеанса")
     s.add_argument("session", type=int)
+
+    jr = sub.add_parser("journal", help="журнал сеанса для разработки (без дампов и личных данных)")
+    jr.add_argument("session", type=int)
+    jr.add_argument("--to", help="сохранить в файл .json")
 
     f = sub.add_parser("feedback", help="отзыв после проверки устройства (обучение)")
     f.add_argument("session", type=int)

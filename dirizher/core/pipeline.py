@@ -21,6 +21,7 @@ from .models import Finding, chip_key
 from .params import apply_changes, read_all as param_rows
 from .profiles import ProfileDB, to_int
 from .registry import load_plugins
+from . import journal
 from .runner import Runner
 from .safety import Safety
 from .skills import SkillDB
@@ -93,7 +94,8 @@ class Conductor:
         self.profiles = ProfileDB(cfg["profiles_dir"], self.skills.profile_dirs())
         self.safety = Safety(cfg["safety"])
         self.learning = Learning(self)
-        self.runner = Runner(self.log)
+        self.runner = Runner(self.log, self._keep_output)
+        self._versions = set()           # (сеанс, лезвие): версия уже записана
         self.plugins, self.plugin_report = load_plugins(self, cfg, sim, self.skills.active)
         for path, err in self.profiles.errors:
             ui.warn(f"профиль {Path(path).name} пропущен: {err}")
@@ -102,6 +104,34 @@ class Conductor:
     def log(self, message: str, level: str = "info", data: dict | None = None) -> None:
         if self.session is not None:
             self.memory.log(self.session, level, message, data)
+
+    def _keep_output(self, res, keep_output: bool = True) -> dict:
+        """Полный вывод команды — отдельным файлом рядом с журналом сеанса (для разработки).
+
+        Дампы сюда не попадают: плагины читают чип во временные файлы, а вывод с данными
+        чипа помечают keep_output=False. Файлы только добавляются, ничего не переписывается.
+        """
+        if self.session is None:
+            return {}
+        rel = journal.save_command(self.memory.logs_dir, self.session, res, keep_output)
+        return {"file": rel}
+
+    def _log_version(self, plugin) -> None:
+        """Версия программы-движка — один раз за сеанс, только в журнал (не в отпечаток)."""
+        key = (self.session, plugin.name)
+        if self.session is None or key in self._versions:
+            return
+        self._versions.add(key)
+        try:
+            ver = plugin.version()
+        except Exception as e:                       # версия — сведение, сеанс не роняет
+            ver, err = None, str(e)
+        else:
+            err = None
+        text = f"версия {ver}" if ver else "версия не определена"
+        self.log(f"инструмент: {plugin.title} ({plugin.name}), {text}",
+                 data={"tool": plugin.name, "version": ver, "settings": dict(plugin.settings or {}),
+                       **({"error": err} if err else {})})
 
     def _start(self, kind: str, parent: int | None = None) -> int:
         self.session = self.memory.start_session(kind, parent)
@@ -178,6 +208,10 @@ class Conductor:
         self.memory.update_session(self.session, plugin=det.plugin, target_class=det.target_class,
                                    fingerprint=det.fingerprint,
                                    profile_id=det.profile.id if det.profile else None)
+        try:
+            self._log_version(self.plugin(det.plugin))
+        except KeyError:
+            pass
 
     def adapter_voltage(self, plugin=None) -> float:
         """Напряжение адаптера: своё у плагина (programmer_voltage в его настройках) или общее."""

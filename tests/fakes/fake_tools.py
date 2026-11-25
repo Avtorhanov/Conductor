@@ -118,6 +118,9 @@ def err(text: str) -> None:
 # ======================================================================
 def probe_rs(argv: list) -> int:
     sub = argv[0] if argv else ""
+    if argv == ["--version"]:
+        out("probe-rs 0.24.0 (git commit: crates.io)")
+        return 0
     if sub == "list":
         if ABSENT:
             out("No debug probes were found.")
@@ -181,6 +184,9 @@ def probe_rs(argv: list) -> int:
 def openocd(argv: list) -> int:
     cmds = [argv[i + 1] for i, a in enumerate(argv) if a == "-c"]
     err("Open On-Chip Debugger 0.12.0")
+    if argv == ["--version"]:
+        err("Licensed under GNU GPL v2")
+        return 0
     if ABSENT:
         err("Error: open failed")
         return 1
@@ -226,6 +232,9 @@ MINIPRO_CHIPS = {"W25Q64BV": ("EF4017", 8 * 1024 * 1024), "AT24C02": (None, 256)
 
 
 def minipro(argv: list) -> int:
+    if argv == ["--version"]:
+        out("minipro version 0.7.2     A free and open TL866 series programmer")
+        return 0
     if ABSENT:
         err("No programmer found.")
         return 1
@@ -266,6 +275,11 @@ def minipro(argv: list) -> int:
 
 # ======================================================================
 def avrdude(argv: list) -> int:
+    if argv == ["-?"]:
+        err("Usage: avrdude [options]\nOptions:\n  -p <partno>  Specify AVR device\n\n"
+            + ("avrdude version 8.0, https://github.com/avrdudes/avrdude" if os.environ.get("FAKE_AVRDUDE_V8") == "1"
+               else "avrdude version 7.1, URL: <https://github.com/avrdudes/avrdude>"))
+        return 1
     if ABSENT:
         err("avrdude: error: cannot find USB device with vid=0x16c0 pid=0x5dc")
         return 1
@@ -394,7 +408,38 @@ def sigrok_cli(argv: list) -> int:
     return 0
 
 
-TOOLS = {"probe-rs": probe_rs, "openocd": openocd, "minipro": minipro, "avrdude": avrdude,
+# ---------- flashrom (для теста «журнал → фикстура»; вывод — по документации, не с железа) ----------
+SPI = "spi.bin"                     # W25Q64: 8 МБ
+
+
+def flashrom(argv: list) -> int:
+    if argv == ["--version"]:
+        out("flashrom v1.3.0 on Linux 6.6.31+rpt-rpi-v8 (aarch64)")
+        return 0
+    out("flashrom v1.3.0 on Linux 6.6.31+rpt-rpi-v8 (aarch64)\nflashrom is free software, get the source code "
+        "at https://flashrom.org\n\nUsing clock_gettime for delay loops (clk_id: 1, resolution: 1ns).")
+    if ABSENT:
+        err("Error: No CH341A device found.")
+        return 1
+    chip = path(SPI)
+    out("Initializing ch341a_spi programmer\nDevice revision is 3.0.4\nThe following protocols are supported: SPI.")
+    out("Probing for AMIC A25L05PT, 64 kB: probe_spi_rdid_generic: id1 0xef, id2 0x4017"
+        if chip.exists() else "Probing for AMIC A25L05PT, 64 kB: probe_spi_rdid_generic: id1 0xff, id2 0xffff")
+    for i in range(400):                                   # длинный «-V»: нужное — далеко от хвоста
+        out(f"Probing for Vendor{i} CHIP{i}, {64 * (i % 9 + 1)} kB: compare_id: id1 0xef, id2 0x4017")
+    if not chip.exists():
+        out("No EEPROM/flash device found.")
+        return 2
+    out('Found Winbond flash chip "W25Q64BV/W25Q64CV/W25Q64FV" (8192 kB, SPI) on ch341a_spi.')
+    out("No operations were specified.")
+    if "-r" in argv:
+        Path(argv[argv.index("-r") + 1]).write_bytes(chip.read_bytes())
+    elif "-w" in argv:
+        chip.write_bytes(Path(argv[argv.index("-w") + 1]).read_bytes())
+    return 0
+
+
+TOOLS = {"flashrom": flashrom, "probe-rs": probe_rs, "openocd": openocd, "minipro": minipro, "avrdude": avrdude,
          "esptool": esptool, "esptool.py": esptool, "binwalk": binwalk, "sigrok-cli": sigrok_cli}
 
 

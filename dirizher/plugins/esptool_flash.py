@@ -33,7 +33,7 @@ FORBIDDEN = ["--encrypt", "--encrypt-files", "--encrypt_files", "--force",
              "--ignore-flash-encryption-efuse-setting", "--ignore_flash_encryption_efuse_setting",
              "--ignore-flash-enc-efuse", "erase_flash", "erase-flash", "erase_region", "erase-region",
              "--erase-all", "--erase_all", "-e"]
-VERSION_RE = re.compile(r"v?(\d+)\.(\d+)")
+VERSION_RE = re.compile(r"v?(\d+)\.(\d+)(?:\.\d+)?[\w.+-]*")
 FAMILY_LINE_RE = re.compile(r"Detecting chip type\.*\s*(ESP[0-9A-Z-]+)", re.IGNORECASE)
 CHIP_RE = re.compile(r"Chip (?:is|type:)\s*([^\n(]+)", re.IGNORECASE)
 FAMILY_RE = re.compile(r"(ESP32-(?:S2|S3|C2|C3|C5|C61|C6|H2|H4|P4)|ESP32|ESP8266|ESP8285)", re.IGNORECASE)
@@ -55,6 +55,7 @@ class EsptoolPlugin(Plugin):
         super().__init__(conductor, settings)
         self.target_class = str(self.settings.get("target_class", self.target_class))
         self._major = None
+        self._version = None
 
     @property
     def exe(self) -> str:
@@ -62,12 +63,22 @@ class EsptoolPlugin(Plugin):
             return str(self.settings["cmd"])
         return "esptool" if shutil.which("esptool") else "esptool.py"
 
+    def _version_match(self):
+        if self._version is None:
+            res = self.run([self.exe, "version"], timeout=30)
+            self._version = VERSION_RE.search(res.out + res.err) or False
+        return self._version or None
+
     def major(self) -> int:
         if self._major is None:
-            res = self.run([self.exe, "version"], timeout=30)
-            m = VERSION_RE.search(res.out + res.err)
+            m = self._version_match()
             self._major = int(m.group(1)) if m else 4
         return self._major
+
+    def version(self):
+        # ПРОВЕРИТЬ НА ЖЕЛЕЗЕ: `esptool version` печатает «esptool.py v4.7.0» / «esptool v5.0.0».
+        m = self._version_match()
+        return m.group(0).lstrip("v") if m else None
 
     def _n(self, name: str) -> str:
         """Имя команды/параметра в стиле нужной версии: v5 — через дефис."""

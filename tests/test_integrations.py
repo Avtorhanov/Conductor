@@ -133,7 +133,7 @@ class ProbeRsTests(Base):
     def test_probe_is_read_only(self):
         self.conductor().detect_only()
         subs = {a[0] for a in self.calls("probe-rs")}
-        self.assertTrue(subs <= {"list", "info"}, subs)
+        self.assertTrue(subs <= {"list", "info", "--version"}, subs)    # --version: версия для журнала (0.7.0)
 
     def test_no_debug_probe(self):
         os.environ["FAKE_ABSENT"] = "1"
@@ -239,6 +239,8 @@ class MiniproTests(Base):
         self.chip.write_bytes(ft.healthy_w25q64())
         self.conductor().detect_only()
         for argv in self.calls("minipro"):
+            if argv == ["--version"]:                   # версия для журнала (0.7.0): чип не трогает
+                continue
             self.assertIn("-D", argv)
             self.assertFalse({"-w", "-r", "-E"} & set(argv))
 
@@ -303,6 +305,8 @@ class AvrdudeTests(Base):
     def test_probe_is_read_only(self):
         self.conductor().detect_only()
         for argv in self.calls("avrdude"):
+            if argv == ["-?"]:                          # версия для журнала (0.7.0): только справка
+                continue
             self.assertIn("-n", argv)
             self.assertNotIn("-U", argv)
 

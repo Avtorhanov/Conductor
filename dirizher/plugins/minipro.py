@@ -29,7 +29,7 @@ from pathlib import Path
 
 from ..core.models import Detection
 from ..core.plugin import Plugin
-from ._common import extra_args, fail_text, guard
+from ._common import extra_args, fail_text, guard, tool_version
 
 FORBIDDEN = ["-y", "--no_id_error", "-s", "--no_size_error", "-S", "--no_size_warning", "-v",
              "--skip_verify", "-E", "--erase", "-c", "--fuses", "--lock", "--uid", "-x", "--skip_id"]
@@ -82,6 +82,10 @@ class MiniproPlugin(Plugin):
             return False, (f"«{self.device}» — микроконтроллер: через minipro не обслуживается "
                            f"(для AVR используйте плагин avrdude)")
         return True, f"тип из настроек: {self.device} → {self.target_class}"
+
+    def version(self):
+        # ПРОВЕРИТЬ НА ЖЕЛЕЗЕ: `minipro --version` печатает «minipro version 0.7.2 …».
+        return tool_version(self, ["minipro", "--version"], r"minipro version\s+v?(\d+\.\d+[\w.+-]*)")
 
     def probe(self):
         res = self.run(self._cmd("-D"), timeout=int(self.settings.get("probe_timeout", 60)))

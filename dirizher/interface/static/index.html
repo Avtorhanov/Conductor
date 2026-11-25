@@ -1178,6 +1178,9 @@ async function renderSession(v, sid) {
   if (d.actions.length) v.append(h("section", { class: "card" }, h("h3", {}, "Действия"), h("div", { class: "opts" }, d.actions.map(optButton))));
   v.append(h("section", { class: "card" }, h("h3", {}, "Журнал событий"),
     h("div", { class: "events" }, d.events.map(e => e.ts + " [" + e.level + "] " + e.message).join("\n"))));
+  v.append(h("section", { class: "card" }, h("h3", {}, "Журнал для разработки"),
+    h("p", { class: "muted" }, "Команды, полный вывод программ и их версии — без дампов. MAC, серийные номера, имя прибора и домашние папки заменены. Файл можно скачать и на телефон."),
+    h("a", { class: "btn small", href: "/api/journal?sid=" + sid + "&sim=" + (S.sim ? 1 : 0), download: "" }, "Скачать журнал для разработки")));
 }
 
 /* =====================================================================

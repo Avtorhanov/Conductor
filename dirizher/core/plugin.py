@@ -9,6 +9,9 @@
     write(det, data) — записать содержимое целиком
 
 Сверку после записи и резервные копии делает ядро — плагину об этом думать не нужно.
+
+Необязательно: version() — версия внешней программы (строка или None). Ядро зовёт её один раз
+за сеанс после опознания и пишет в журнал; в отпечаток (fingerprint) версия не входит.
 """
 from __future__ import annotations
 
@@ -40,6 +43,13 @@ class Plugin:
     def write(self, det, data: bytes) -> None:
         raise NotImplementedError
 
-    # удобный доступ к запуску внешних программ с журналом и таймаутом
-    def run(self, cmd: list, timeout: int = 120):
-        return self.c.runner.run(cmd, timeout)
+    def version(self):
+        """Версия программы-движка строкой или None (не знаю). Только чтение, без железа."""
+        return None
+
+    # удобный доступ к запуску внешних программ с журналом и таймаутом.
+    # keep_output=False — в выводе данные чипа: полный вывод не сохранять в журнал.
+    def run(self, cmd: list, timeout: int = 120, keep_output: bool = True):
+        if keep_output:
+            return self.c.runner.run(cmd, timeout)
+        return self.c.runner.run(cmd, timeout, keep_output=False)

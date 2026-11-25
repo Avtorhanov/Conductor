@@ -708,6 +708,27 @@ def api_download(h: Handler, q):
     h.wfile.write(data)
 
 
+@route("GET", "/api/journal")
+def api_journal(h: Handler, q):
+    """Журнал сеанса для разработки: JSON-файл без дампов и личных данных (скачать на телефон)."""
+    from ..core import journal
+
+    sid = int(q["sid"])
+    with h.app.conductor(_sim(q)) as c:
+        b = journal.bundle(c, sid)
+    if b is None:
+        return h.fail(404, f"нет сеанса №{sid}")
+    body = json.dumps(b, ensure_ascii=False, indent=1).encode("utf-8")
+    name = journal.filename(sid, _sim(q))
+    h.send_response(200)
+    h.send_header("Content-Type", "application/json; charset=utf-8")
+    h.send_header("Content-Length", str(len(body)))
+    h.send_header("Content-Disposition", f"attachment; filename=\"{name}\"; filename*=UTF-8''{quote(name)}")
+    h._common_headers()
+    h.end_headers()
+    h.wfile.write(body)
+
+
 @route("GET", "/api/images")
 def api_images(h: Handler, q):
     h.send_json({"items": h.app.images(), "max_mb": h.app.max_upload // (1024 * 1024)})

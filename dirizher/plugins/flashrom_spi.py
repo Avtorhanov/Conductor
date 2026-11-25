@@ -17,6 +17,7 @@ from pathlib import Path
 
 from ..core.models import Detection
 from ..core.plugin import Plugin
+from ._common import tool_version
 
 FOUND_RE = re.compile(r'Found (.+?) flash chip "(.+?)" \((\d+) kB, (\w+)\)')
 RDID_RE = re.compile(r"rdid\w*:\s*id1 0x([0-9a-fA-F]+),\s*id2 0x([0-9a-fA-F]+)", re.IGNORECASE)
@@ -43,6 +44,10 @@ class FlashromSPIPlugin(Plugin):
         if not shutil.which("flashrom"):
             return False, "flashrom не установлен (sudo apt install flashrom)"
         return True, f"программатор: {self.programmer}"
+
+    def version(self):
+        # ПРОВЕРИТЬ НА ЖЕЛЕЗЕ: `flashrom --version` печатает «flashrom v1.3.0 on Linux …» (или без «v»).
+        return tool_version(self, ["flashrom", "--version"], r"flashrom\s+v?(\d+\.\d+[\w.+-]*)")
 
     def probe(self):
         # Без операции flashrom только опознаёт чип — ничего не читает и не пишет.

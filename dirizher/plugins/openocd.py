@@ -25,7 +25,7 @@ from pathlib import Path
 
 from ..core.models import Detection
 from ..core.plugin import Plugin
-from ._common import as_int, fail_text, guard
+from ._common import as_int, fail_text, guard, tool_version
 
 FORBIDDEN_WORDS = ["unlock", "lock", "mass_erase", "protect", "option_write", "options_write",
                    "option_load", "options_load", "erase_address"]
@@ -74,6 +74,10 @@ class OpenOCDPlugin(Plugin):
         if missing:
             return False, "укажите в config.yaml → plugins: openocd: " + ", ".join(missing)
         return True, f"{self.settings['interface']} + {self.settings['target']}, МК из настроек: {self.mcu}"
+
+    def version(self):
+        # ПРОВЕРИТЬ НА ЖЕЛЕЗЕ: `openocd --version` печатает в stderr «Open On-Chip Debugger 0.12.0 …».
+        return tool_version(self, ["openocd", "--version"], r"Open On-Chip Debugger\s+v?(\d+\.\d+[\w.+-]*)")
 
     def probe(self):
         res = self.run(self._cmd("init", "shutdown"), timeout=int(self.settings.get("probe_timeout", 60)))

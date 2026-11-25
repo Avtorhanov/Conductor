@@ -203,7 +203,7 @@
       case "/api/hood": { const hd = await hood(); return reply(hd.areas[q("area")] || hd.areas.dev); }
       case "/api/hood/file": { const hd = await hood(); return hd.files[q("path")] ? reply(hd.files[q("path")]) : fail(404, "нет такого файла в демо"); }
       case "/api/hood/history": return reply({ path: q("path"), items: [] });
-      case "/api/download": return fail(403, NOT_HERE);
+      case "/api/download": case "/api/journal": return fail(403, NOT_HERE);
     }
     return fail(404, "Демо: такого запроса нет в записи");
   }
