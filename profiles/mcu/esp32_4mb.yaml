@@ -11,6 +11,9 @@ voltage: 3.3
 size: 4194304
 allow_write: true
 
+tool:                  # модель esptool узнаёт сам; chip ускоряет подключение
+  esptool: {chip: esp32}
+
 checks:
   - stable_read
   - not_zero

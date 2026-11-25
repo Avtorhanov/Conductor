@@ -6,6 +6,7 @@ group: buy
 level: 4
 icon: cable
 voltage: "дифференциальная линия A/B (развязка — желательна)"
+groups: [dialout]              # последовательный порт — группа dialout
 engines: [modbus_rtu]
 targets: [device.modbus]
 what: >-

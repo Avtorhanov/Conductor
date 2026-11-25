@@ -9,6 +9,7 @@ voltage: "3,3 В (логика Raspberry Pi)"
 engines: [flashrom]
 needs: [soic8_clip]
 targets: [memory.spi_nor]
+groups: [spi]                  # /dev/spidev* — группа spi (Raspberry Pi OS)
 what: >-
   У Raspberry Pi есть своя шина SPI с логикой 3,3 В. Достаточно проводов «мама-мама» или прищепки —
   и flashrom работает через linux_spi.

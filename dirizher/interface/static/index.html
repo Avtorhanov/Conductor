@@ -731,6 +731,7 @@ function optTag(o) {
   if (o.action === "tune_form") return ["запись после «ДА»", "tag-warn"];
   if (o.action === "help") return ["справка", "tag-info"];
   if (o.action === "playground") return ["тренажёр", "tag-info"];
+  if (o.action === "connect") return ["только чтение", "tag-ok"];
   return null;
 }
 
@@ -771,6 +772,7 @@ const VIEW_ACTIONS = {
   doctor: () => openPage(renderDoctor),
   tune_form: p => openPage(v => renderTune(v, p.session)),
   tool: p => openPage(v => renderTool(v, p.name)),
+  connect: p => openPage(v => renderConnect(v, p.card)),
   fix: p => fixModal(p.session, p.fix),
   catalog: p => {
     if (p.card) return openPage(v => renderCard(v, p.card));
@@ -1407,6 +1409,37 @@ async function renderDevice(v) {
 }
 
 /* Прибор → Инструменты → лезвие → «Настроить»: поля по схеме лезвия, сохранение — config.tools.yaml через капот. */
+/* Подключить инструмент — начать с переходника: список проверок со статусом и советом */
+async function renderConnect(v, cardId) {
+  const alive = liveCheck();
+  v.append(backBtn());
+  const card = h("section", { class: "card" }, h("h1", {}, "Подключить инструмент"), h("p", { class: "muted" }, "Загружаю…"));
+  v.append(card);
+  let d;
+  try { d = await api("/api/connect" + (cardId ? "?card=" + encodeURIComponent(cardId) : "") + (S.sim ? (cardId ? "&" : "?") + "sim=1" : "")); }
+  catch (e) { card.lastChild.textContent = e.message; return; }
+  if (!alive()) return;
+  card.textContent = "";
+  if (!cardId) {
+    card.append(h("h1", {}, "Какой переходник у вас в руках?"), h("p", { class: "muted" }, "Выберите — покажу, что проверить, и опрошу только его инструменты."));
+    card.append(h("div", { class: "opts" }, d.adapters.map(a => optButton({ label: a.title, explain: a.tagline, action: "connect", params: { card: a.id } }))));
+    return;
+  }
+  const MARK = { ok: "✔", warn: "!", fail: "✖", info: "·" };
+  const CLS = { ok: "h", warn: "w", fail: "e", info: "h" };
+  card.append(h("h1", {}, d.card.title), h("p", { class: "muted" }, d.card.tagline));
+  if (d.note) card.append(h("div", { class: "msg w" }, d.note));
+  for (const r of d.checks) {
+    const box = h("div", { class: "msg " + CLS[r.status] },
+      h("b", {}, MARK[r.status] + " " + r.title + " — " + r.status_title), h("div", {}, r.text));
+    if (r.status !== "ok" && r.advice) box.append(h("div", {}, "→ " + r.advice));
+    if (r.status !== "ok" && r.code) box.append(h("pre", { class: "mono", style: "white-space: pre-wrap; overflow-wrap: anywhere; margin: .3rem 0" }, r.code));
+    if (r.action && r.status !== "ok") box.append(h("button", { class: "btn small", type: "button", onclick: () => go(r.action) }, r.action.action === "tool" ? "Настроить" : "Открыть"));
+    card.append(box);
+  }
+  v.append(h("section", { class: "card" }, h("h3", {}, "Дальше"), h("div", { class: "opts" }, d.actions.map(optButton))));
+}
+
 async function renderTool(v, name) {
   const alive = liveCheck();
   v.append(backBtn("Прибор"));

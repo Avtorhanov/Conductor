@@ -10,6 +10,8 @@
 
 Необязательно: params — карта параметров (core/params.py) для сценария «Настройка»;
 bus — настройки шины для лезвия (например, окно регистров Modbus: start, count).
+tool — настройки лезвий для этой модели: {probe_rs: {chip: …}, openocd: {target: …, mcu: …}}; размер
+берётся из size (core/target.py). Сверка с схемой лезвия — core/target.check().
 Профили навыков (skills/<id>/profiles/) загружаются вместе с основными.
 """
 from __future__ import annotations
@@ -47,6 +49,7 @@ class Profile:
     notes: str = ""
     params: list = field(default_factory=list)
     bus: dict = field(default_factory=dict)
+    tool: dict = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, d: dict, path: Path) -> "Profile":
@@ -70,6 +73,10 @@ class Profile:
         bus = d.get("bus") or {}
         if not isinstance(bus, dict):
             raise ValueError("bus — словарь настроек шины")
+        tool = d.get("tool") or {}
+        if not isinstance(tool, dict) or not all(isinstance(v, dict) for v in tool.values()):
+            raise ValueError("tool — настройки лезвий: tool: {<лезвие>: {<ключ>: <значение>}}")
+        tool = {str(k): {str(kk): vv for kk, vv in v.items()} for k, v in tool.items()}
         params = normalize_params(d.get("params"), bus)
         size = to_int(d["size"]) if d.get("size") is not None else None
         for p in params:
@@ -84,7 +91,7 @@ class Profile:
             allow_write=bool(d.get("allow_write", True)),
             checks=d.get("checks") or [], recipes=recipes,
             preserve=d.get("preserve") or [], notes=d.get("notes") or "",
-            params=params, bus=bus,
+            params=params, bus=bus, tool=tool,
         )
 
     @property

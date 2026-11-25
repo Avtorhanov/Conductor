@@ -26,7 +26,7 @@ from pathlib import Path
 from ..core.models import Detection
 from ..core.plugin import Plugin
 from ..core.settings import field
-from ._common import as_int, fail_text, guard, tool_version
+from ._common import PREFLIGHT_SWD, as_int, fail_text, guard, tool_version
 
 FORBIDDEN_WORDS = ["unlock", "lock", "mass_erase", "protect", "option_write", "options_write",
                    "option_load", "options_load", "erase_address"]
@@ -41,6 +41,9 @@ class OpenOCDPlugin(Plugin):
     title = "Микроконтроллеры через OpenOCD (SWD/JTAG)"
     target_class = "mcu.arm"
     hardware = True
+    model_setting = "mcu"                # модель — из профиля (tool: openocd: mcu, target) или настроек
+    size_setting = "flash_size"
+    preflight = PREFLIGHT_SWD
     settings_schema = [
         field("interface", "Файл интерфейса OpenOCD", "path", required=True, example="interface/stlink.cfg"),
         field("target", "Файл цели OpenOCD", "path", required=True, example="target/stm32f1x.cfg"),

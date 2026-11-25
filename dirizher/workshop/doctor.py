@@ -110,6 +110,15 @@ def check(cfg: dict, sim: bool = False, deep: bool = True, hood: Hood | None = N
         # 4. профили
         for path, err in c.profiles.errors:
             issues.append(_file_issue(hood, _rel(hood, path), f"Профиль {Path(path).name} не загружен", err))
+        from ..core import target as target_mod
+        from ..core.registry import discover
+        classes, _ = discover(c.skills.active)
+        for prof in c.profiles.profiles:
+            errs = target_mod.check(prof, classes) if prof.tool else []
+            if errs:
+                issues.append(_issue(f"profile_tool:{prof.id}", "warn",
+                                     f"Профиль {prof.id}: поле tool не сходится со схемой лезвия",
+                                     "; ".join(errs)))
         # 5. навыки и лезвия
         for folder, err in c.skills.errors:
             issues.append(_file_issue(hood, _rel(hood, Path(folder) / "skill.yaml"),

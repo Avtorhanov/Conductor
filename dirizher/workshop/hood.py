@@ -302,6 +302,11 @@ class Hood:
                         res["warnings"].append("напряжение не указано — при работе система спросит вас")
                     if prof.params:
                         res["hints"].append(f"параметров в карте: {len(prof.params)}")
+                    if prof.tool:
+                        from ..core import target as target_mod
+                        from ..core.registry import discover
+                        classes, _ = discover(SkillDB(self.root / "skills").active)
+                        res["errors"] += target_mod.check(prof, classes)
         elif k == "markdown" and text.startswith("---"):
             head = text.split("---", 2)
             try:

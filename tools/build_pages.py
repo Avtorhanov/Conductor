@@ -274,6 +274,8 @@ class Recorder:
                       "connect": {"urls": [], "pin": None, "need_pin": False}})
         return {"version": __version__, "hello": hello, "guide": self.req("GET", "/api/guide"),
                 "roadmap": self.req("GET", "/api/roadmap"), "catalog": cat, "cards": cards,
+                # список переходников; сами проверки (USB, группы, программы) — только на приборе
+                "connect": self.req("GET", "/api/connect?sim=1"),
                 "help_items": self.clean(items), "articles": articles,
                 "builder_fields": self.req("GET", "/api/builder/fields"),
                 "builder_drafts": self.req("GET", "/api/builder/drafts")}

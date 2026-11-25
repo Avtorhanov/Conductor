@@ -26,6 +26,7 @@ from .runner import Runner
 from .safety import Safety
 from .skills import SkillDB
 from .storage import BackupStore, sha256
+from . import target as target_mod
 
 STEPS = 7
 
@@ -96,9 +97,48 @@ class Conductor:
         self.learning = Learning(self)
         self.runner = Runner(self.log, self._keep_output)
         self._versions = set()           # (сеанс, лезвие): версия уже записана
+        self.target = None               # профиль модели, выбранный человеком (select)
+        self.only = None                 # опрашивать только эти лезвия (выбран переходник)
+        self.preflight = None            # строки «Подготовки» из карточки переходника
         self.plugins, self.plugin_report = load_plugins(self, cfg, sim, self.skills.active)
         for path, err in self.profiles.errors:
             ui.warn(f"профиль {Path(path).name} пропущен: {err}")
+
+    def select(self, target: str | None = None, plugins=None, preflight=None, source: str = "") -> None:
+        """Выбор перед сеансом: модель (id профиля) и/или лезвия переходника. Только настройки — железо
+        не опрашивается (кроме available()).
+
+        target — настройки лезвий берутся ещё и из profile.tool (core/target.py): config.yaml <
+        config.tools.yaml < профиль. plugins — опрашивать только эти лезвия (source — чьи: название
+        переходника). preflight — строки шага «Подготовка» (из карточки переходника)."""
+        from .registry import discover
+        overlay = None
+        if target:
+            prof = self.profiles.get(target)
+            if prof is None:
+                raise ValueError(f"нет профиля «{target}» — список: python3 -m dirizher profiles")
+            classes, _ = discover(self.skills.active)
+            errors = target_mod.check(prof, classes)
+            if errors:
+                raise ValueError(f"в профиле «{target}» ошибки в поле tool: " + "; ".join(errors))
+            overlay = target_mod.overlay(prof, classes)
+            self.target = prof
+        self.only = list(plugins) if plugins is not None else None
+        self.preflight = list(preflight) if preflight else None
+        why = f"выбран переходник «{source}»" if source else "выбран другой инструмент"
+        self.plugins, self.plugin_report = load_plugins(self, self.cfg, self.sim, self.skills.active,
+                                                        overlay=overlay, only=self.only, only_why=why)
+
+    def _selection_note(self) -> None:
+        """В журнал и человеку — что выбрано перед сеансом."""
+        if self.only is not None:
+            names = ", ".join(self.only) or "—"
+            self.log(f"опрашиваются только лезвия переходника: {names}", data={"only": self.only})
+            if not self.plugins:
+                self.ui.warn(f"у выбранного переходника нет готовых лезвий ({names}): "
+                             f"«Прибор» → «Инструменты» → включить и настроить")
+        if self.target is not None:
+            self.log(f"модель выбрана человеком: {self.target.id}", data={"target": self.target.id})
 
     # ================= служебное =================
     def log(self, message: str, level: str = "info", data: dict | None = None) -> None:
@@ -205,6 +245,12 @@ class Conductor:
         return best
 
     def _record_detection(self, det) -> None:
+        if self.target is not None:
+            self.ui.info(f"модель выбрана вами: {self.target.name} — по проводам её не узнать, "
+                         f"выбор проверьте по маркировке чипа")
+            if det.profile is not None and det.profile.id != self.target.id \
+                    and det.profile.target_class == self.target.target_class:
+                self.ui.warn(f"по отпечатку подошёл другой профиль: {det.profile.name}")
         self.memory.update_session(self.session, plugin=det.plugin, target_class=det.target_class,
                                    fingerprint=det.fingerprint,
                                    profile_id=det.profile.id if det.profile else None)
@@ -394,15 +440,30 @@ class Conductor:
         self.log(f"сверка: {'совпало' if ok else 'НЕ совпало'}; снимок «после» {sha_after[:16]}…")
         return ok
 
+    def preflight_lines(self) -> list:
+        """Строки «Подготовки»: из карточки переходника, иначе — общие у всех активных лезвий
+        (Plugin.preflight), иначе — общий текст ядра (PREFLIGHT, про прищепку SPI-флешки)."""
+        if self.preflight:
+            return list(self.preflight)
+        own = {tuple(p.preflight) if p.preflight else None for p in self.plugins}
+        if len(own) == 1:
+            only = next(iter(own))
+            if only:
+                return list(only)
+        return list(PREFLIGHT)
+
     # ================= сценарии =================
-    def run(self, image_path: str | None = None, label: str | None = None) -> int:
+    def run(self, image_path: str | None = None, label: str | None = None, target: str | None = None) -> int:
+        if target:
+            self.select(target=target, plugins=self.only, preflight=self.preflight)
         ui = self.ui
         sid = self._start("run")
         ui.header(f"Сеанс №{sid}" + (" — ПРОБНЫЙ РЕЖИМ, запись отключена" if self.dry_run else "")
                   + (" — симулятор" if self.sim else ""))
 
         ui.step(1, STEPS, "Подготовка: безопасность прежде всего")
-        for line in PREFLIGHT:
+        self._selection_note()
+        for line in self.preflight_lines():
             ui.info("• " + line.format(pv=self.safety.programmer_voltage))
         ui.pause("Проверили? Нажмите Enter…")
 
@@ -632,6 +693,7 @@ class Conductor:
 
         Возвращает (плагин, опознание, None) или (None, None, итог остановки)."""
         ui = self.ui
+        self._selection_note()
         ui.step(first_step, total, "Опознание (только чтение идентификаторов)")
         det = self.detect()
         if det is None:
@@ -677,8 +739,10 @@ class Conductor:
         for row in param_rows(data, profile.params):
             self.ui.info(f"{row['title']}: {row['text']}" + ("" if row["writable"] else "  (только чтение)"))
 
-    def read_params(self) -> int:
+    def read_params(self, target: str | None = None) -> int:
         """Прочитать параметры прибора и показать их. Только чтение."""
+        if target:
+            self.select(target=target, plugins=self.only, preflight=self.preflight)
         ui = self.ui
         sid = self._start("params")
         ui.header(f"Сеанс №{sid}: параметры прибора (только чтение)" + (" — симулятор" if self.sim else ""))
@@ -700,10 +764,12 @@ class Conductor:
             ui.warn("повторные чтения не совпали — значения могут быть неточными, запись будет заблокирована")
         return self._finish("params_read")
 
-    def tune(self, changes: dict) -> int:
+    def tune(self, changes: dict, target: str | None = None) -> int:
         """Изменить параметры прибора: копия «до» → план «было → стало» → «ДА» → запись и сверка."""
         if not changes:
             raise ValueError("не задано ни одного нового значения")
+        if target:
+            self.select(target=target, plugins=self.only, preflight=self.preflight)
         ui = self.ui
         total = 6
         sid = self._start("tune")
@@ -771,9 +837,12 @@ class Conductor:
         self.show_params(det.profile, image)
         return self._finish("tuned")
 
-    def detect_only(self) -> int:
+    def detect_only(self, target: str | None = None) -> int:
+        if target:
+            self.select(target=target, plugins=self.only, preflight=self.preflight)
         self._start("detect")
         self.ui.header(f"Сеанс №{self.session}: опознание (только чтение)")
+        self._selection_note()
         det = self.detect()
         if det is None:
             self.ui.error("ничего не опознано")

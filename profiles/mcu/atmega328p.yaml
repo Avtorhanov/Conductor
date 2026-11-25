@@ -12,6 +12,9 @@ voltage: null          # чип работает от 1.8 до 5.5 В: подт�
 size: 33792
 allow_write: true
 
+tool:                  # настройки avrdude для этой модели: образ flash + EEPROM = size
+  avrdude: {part: m328p, memories: [flash, eeprom], flash_size: 32768, eeprom_size: 1024}
+
 preserve:              # EEPROM — настройки и калибровки конкретного устройства
   - offset: 0x8000
     length: 0x400

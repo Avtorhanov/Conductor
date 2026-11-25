@@ -28,7 +28,7 @@ from pathlib import Path
 from ..core.models import Detection
 from ..core.plugin import Plugin
 from ..core.settings import field
-from ._common import as_int
+from ._common import CONFIRM_LINE, as_int
 
 HELPER = Path(__file__).resolve().parent.parent / "helpers" / "bp5_i2c.py"
 EEPROM_SIZES = {"24C01": 128, "24C02": 256, "24C04": 512, "24C08": 1024, "24C16": 2048, "24C32": 4096,
@@ -40,6 +40,14 @@ class BusPirateI2CPlugin(Plugin):
     title = "I2C EEPROM 24Cxx через Bus Pirate 5"
     target_class = "memory.i2c_eeprom"
     hardware = True
+    model_setting = "eeprom"                 # у 24Cxx нет ID — модель из профиля (tool: bp5_i2c: eeprom)
+    preflight = [
+        "Устройство обесточено: Bus Pirate питает микросхему сам (psu_voltage). Если питание даёт плата — "
+        "psu_voltage: 0 и своё напряжение адаптера в настройках.",
+        "Прищепка или провода: SDA, SCL, GND, VCC; вывод 1 — по точке на корпусе микросхемы.",
+        "Для записи вывод WP (7) — на GND, иначе запись не пройдёт сверку.",
+        CONFIRM_LINE,
+    ]
     common_settings = ("enabled", "programmer_voltage", "probe_timeout", "read_timeout", "write_timeout")
     settings_defaults = {"probe_timeout": 30, "read_timeout": 600, "write_timeout": 1200}
     settings_schema = [
@@ -51,6 +59,11 @@ class BusPirateI2CPlugin(Plugin):
         field("pullups", "Подтяжки шины", "bool", default=True),
         field("command_timeout", "Ожидание ответа BP5, с", "float", default=3),
     ]
+
+    @classmethod
+    def image_size(cls, settings: dict):
+        m = re.search(r"24(?:C|LC|AA|FC|CS)(\d+)", str(settings.get("eeprom", "")).upper())
+        return EEPROM_SIZES.get(f"24C{m.group(1)}") if m else None
 
     def __init__(self, conductor, settings=None):
         super().__init__(conductor, dict(settings or {}))

@@ -62,7 +62,8 @@ def discover(skills=()) -> tuple:
     return found, errors
 
 
-def load_plugins(conductor, cfg: dict, sim: bool, skills=()) -> tuple:
+def load_plugins(conductor, cfg: dict, sim: bool, skills=(), overlay: dict | None = None,
+                 only=None, only_why: str = "") -> tuple:
     """Создать включённые плагины.
 
     В режиме --sim работают ТОЛЬКО виртуальные плагины — чтобы учебный запуск
@@ -71,12 +72,17 @@ def load_plugins(conductor, cfg: dict, sim: bool, skills=()) -> tuple:
     поверх — из config.tools.yaml. Настройки сверяются со схемой лезвия (core/settings.py):
     неизвестный ключ — предупреждение (warnings); у включённого лезвия нет обязательного поля или
     неверный тип — «недоступен: …», available() тогда не зовётся.
+
+    overlay — {лезвие: настройки} модели цели из профиля (core/target.py): накладывается последним.
+    only — опрашивать только эти лезвия (выбран переходник); остальные — «не опрашивается: only_why».
     """
     classes, errors = discover(skills)
     active, report = [], []
     for name, (cls, skill) in sorted(classes.items()):
         settings = dict(skill.settings) if skill else {}
         settings.update((cfg.get("plugins") or {}).get(name, {}) or {})
+        if overlay and name in overlay:
+            settings.update(overlay[name])
         enabled = (not cls.hardware) if sim else (cls.hardware and bool(settings.get("enabled", False)))
         status = "выключен"
         try:
@@ -87,7 +93,10 @@ def load_plugins(conductor, cfg: dict, sim: bool, skills=()) -> tuple:
             issues["unknown"] = []                   # схемы нет (старое лезвие) — свои ключи не знаем
         warnings = issues["unknown"] + issues["type"]
         blockers = issues["missing"] + issues["type"]
-        if enabled and blockers and cls.hardware:
+        if enabled and only is not None and name not in only:
+            status = "не опрашивается: " + (only_why or "выбран другой инструмент")
+            enabled = False
+        elif enabled and blockers and cls.hardware:
             status = "недоступен: " + "; ".join(blockers)
             enabled = False
         elif enabled:

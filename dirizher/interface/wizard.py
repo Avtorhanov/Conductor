@@ -132,6 +132,8 @@ class Wizard:
             return self.device()
         if name == "tool":
             return self.tool(str(params.get("name") or ""))
+        if name == "connect":
+            return self.connect(params.get("card"))
         if name == "roadmap":
             return self.roadmap()
         if name == "builder":
@@ -399,6 +401,27 @@ class Wizard:
         if idx is None or not 0 <= idx < len(tools):
             return None
         return self.tool(tools[idx]["name"])
+
+    def connect(self, card_id=None):
+        """Начать с переходника: выбрать карточку → проверки → «Настроить» / «Проверить подключение»."""
+        from ..workshop import connect
+        ui = self.ui
+        with guide.open_readonly(self.cfg, False) as c:
+            report, profiles = c.plugin_report, c.profiles
+        try:
+            v = connect.view(self.cfg, card_id, report, profiles=profiles, sim=self.sim)
+        except ValueError as e:
+            ui.error(str(e))
+            return None
+        if not card_id:
+            ui.header("Подключить инструмент: какой переходник у вас в руках?")
+            opts = [{"label": a["title"], "explain": a["tagline"], "action": "connect", "params": {"card": a["id"]}}
+                    for a in v["adapters"]]
+            return self.then(opts, "Выберите переходник (Enter — назад):")
+        ui.header(f"Подключить: {v['card']['title']}")
+        for line in connect.text(v):
+            ui.out(line)
+        return self.then(v["actions"], "Дальше (Enter — назад):")
 
     def tool(self, name: str):
         """Настройки лезвия поле за полем; сохранение — config.tools.yaml через капот, со словом."""

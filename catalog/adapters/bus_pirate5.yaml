@@ -6,6 +6,7 @@ group: buy
 level: 2
 icon: board
 voltage: "1,2–5,5 В (регулируемое питание и буферы выводов)"
+groups: [dialout]              # последовательный порт — группа dialout
 engines: [buspirate]
 needs: [soic8_clip]
 targets: [memory.i2c_eeprom]

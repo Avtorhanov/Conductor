@@ -28,7 +28,7 @@ from pathlib import Path
 from ..core.models import Detection
 from ..core.plugin import Plugin
 from ..core.settings import field
-from ._common import extra_args, fail_text, guard, parse_size
+from ._common import PREFLIGHT_UART, extra_args, fail_text, guard, parse_size
 
 FORBIDDEN = ["--encrypt", "--encrypt-files", "--encrypt_files", "--force",
              "--ignore-flash-encryption-efuse-setting", "--ignore_flash_encryption_efuse_setting",
@@ -51,6 +51,7 @@ class EsptoolPlugin(Plugin):
     title = "ESP8266/ESP32 через esptool (USB-UART)"
     target_class = "mcu.esp"
     hardware = True
+    preflight = PREFLIGHT_UART               # модель esptool узнаёт сам — выбирать не нужно
     settings_defaults = {"probe_timeout": 60, "read_timeout": 900, "write_timeout": 1800}
     settings_schema = [
         field("port", "Порт", "port", default="/dev/ttyUSB0", example="/dev/ttyUSB0"),

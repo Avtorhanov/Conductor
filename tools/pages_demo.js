@@ -199,6 +199,7 @@
       case "/api/help/article": return core.articles[q("id")] ? reply(core.articles[q("id")]) : fail(404, "нет такой статьи");
       case "/api/doctor": return reply(core.doctor);
       case "/api/catalog": return reply(core.catalog);
+      case "/api/connect": return q("card") ? fail(403, "Демо: проверки подключения (USB, права, программы) идут на самом приборе — здесь нет вашего переходника") : reply(core.connect || { adapters: [] });
       case "/api/catalog/card": return core.cards[q("id")] ? reply(core.cards[q("id")]) : fail(404, "нет такой карточки");
       case "/api/hood": { const hd = await hood(); return reply(hd.areas[q("area")] || hd.areas.dev); }
       case "/api/hood/file": { const hd = await hood(); return hd.files[q("path")] ? reply(hd.files[q("path")]) : fail(404, "нет такого файла в демо"); }

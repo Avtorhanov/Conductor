@@ -29,7 +29,7 @@ from pathlib import Path
 from ..core.models import Detection
 from ..core.plugin import Plugin
 from ..core.settings import field
-from ._common import as_int, extra_args, fail_text, guard, tool_version
+from ._common import PREFLIGHT_ISP, as_int, extra_args, fail_text, guard, tool_version
 
 FORBIDDEN = ["-u", "-F", "-D", "-e", "-t", "-U"]
 SIG_RE = re.compile(r"device signature\s*=\s*(?:0x)?([0-9a-f]{2})\s*([0-9a-f]{2})\s*([0-9a-f]{2})",
@@ -45,6 +45,8 @@ class AvrdudePlugin(Plugin):
     title = "Микроконтроллеры AVR через avrdude"
     target_class = "mcu.avr"
     hardware = True
+    model_setting = "part"               # модель — из профиля (tool: avrdude: part, flash_size, eeprom_size)
+    preflight = PREFLIGHT_ISP
     settings_schema = [
         field("programmer", "Программатор (-c)", default="usbasp", example="usbasp"),
         field("part", "Микроконтроллер (-p)", required=True, example="m328p"),
@@ -55,6 +57,14 @@ class AvrdudePlugin(Plugin):
         field("flash_size", "Размер flash, байт", "int", example=32768),
         field("eeprom_size", "Размер EEPROM, байт", "int", example=1024),
     ]
+
+    @classmethod
+    def image_size(cls, settings: dict):
+        """Образ = выбранные памяти подряд (flash + eeprom)."""
+        mems = settings.get("memories") or ["flash", "eeprom"]
+        mems = [mems] if isinstance(mems, str) else mems
+        sizes = [as_int(settings.get(f"{m}_size"), 0) for m in mems]
+        return sum(sizes) if all(sizes) else None
 
     def __init__(self, conductor, settings=None):
         super().__init__(conductor, settings)

@@ -30,7 +30,7 @@ from pathlib import Path
 from ..core.models import Detection
 from ..core.plugin import Plugin
 from ..core.settings import field
-from ._common import extra_args, fail_text, guard, tool_version
+from ._common import CONFIRM_LINE, extra_args, fail_text, guard, tool_version
 
 FORBIDDEN = ["-y", "--no_id_error", "-s", "--no_size_error", "-S", "--no_size_warning", "-v",
              "--skip_verify", "-E", "--erase", "-c", "--fuses", "--lock", "--uid", "-x", "--skip_id"]
@@ -60,6 +60,13 @@ class MiniproPlugin(Plugin):
     title = "Память в панельке через T48 / TL866II+ (minipro)"
     target_class = "memory.parallel"
     hardware = True
+    model_setting = "device"                 # тип микросхемы — из профиля (tool: minipro: device)
+    preflight = [
+        "Микросхема выпаяна и стоит в панельке программатора по рисунку (вывод 1 — к рычагу), "
+        "или в переходнике SOIC-8 → DIP-8.",
+        "Тип микросхемы выбран точно по маркировке: программатор сам подаёт напряжения по этому типу.",
+        CONFIRM_LINE,
+    ]
     settings_defaults = {"probe_timeout": 60, "read_timeout": 900, "write_timeout": 1800}
     settings_schema = [
         field("device", "Тип микросхемы (minipro -L)", required=True, example="AT24C02"),

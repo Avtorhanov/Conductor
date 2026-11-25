@@ -26,7 +26,7 @@ from pathlib import Path
 from ..core.models import Detection
 from ..core.plugin import Plugin
 from ..core.settings import field
-from ._common import as_int, extra_args, fail_text, guard, parse_hex_bytes, tool_version
+from ._common import PREFLIGHT_SWD, as_int, extra_args, fail_text, guard, parse_hex_bytes, tool_version
 
 FORBIDDEN = ["--allow-erase-all", "--chip-erase", "erase"]
 PROBE_LINE_RE = re.compile(r"^\s*\[\d+\]:\s*(.+)$", re.MULTILINE)
@@ -40,6 +40,9 @@ class ProbeRsPlugin(Plugin):
     title = "Микроконтроллеры ARM/RISC-V через probe-rs (SWD/JTAG)"
     target_class = "mcu.arm"
     hardware = True
+    model_setting = "chip"               # модель — из профиля (tool: probe_rs: chip) или настроек
+    size_setting = "flash_size"          # размер — из size профиля
+    preflight = PREFLIGHT_SWD
     settings_schema = [
         field("chip", "Чип (имя из probe-rs chip list)", required=True, example="STM32F103C8",
               help="Модель МК по SWD надёжно не узнать — укажите её сами."),

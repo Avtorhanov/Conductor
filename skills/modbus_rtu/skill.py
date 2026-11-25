@@ -33,6 +33,12 @@ class ModbusRTUPlugin(Plugin):
     target_class = "device.modbus"
     hardware = True
     voltage_check = False
+    model_setting = "model"                  # у Modbus нет ID модели — из профиля (tool:) или настроек
+    preflight = [
+        "Прибор питается сам; переходник USB–RS-485: A → A, B → B, общий провод — если есть.",
+        "Адрес и скорость прибора известны (паспорт или меню прибора) и совпадают с настройками.",
+        "Запись будет только после копии текущих настроек и вашего подтверждения.",
+    ]
     common_settings = ("enabled", "probe_timeout", "read_timeout", "write_timeout")
     settings_defaults = {"probe_timeout": 20, "read_timeout": 60, "write_timeout": 60}
     settings_schema = [

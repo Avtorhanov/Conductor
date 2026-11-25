@@ -390,6 +390,10 @@ class App:
                 p[key] = str(v)
             elif key == "set":
                 p[key] = guide.clean_set(v)
+            elif key in ("target", "adapter"):
+                if not isinstance(v, str) or not guide.ID_PARAM.match(v):
+                    raise ValueError(f"{key}: ожидался id (латиница, цифры, _)")
+                p[key] = v
         if meta.get("pick") and "session" not in p:
             raise ValueError("не выбран сеанс")
         if action == "sim" and "do" not in p:
@@ -445,7 +449,8 @@ class App:
         if job.result is None:
             job.result = {"session": sid, "outcome": outcome,
                           "outcome_text": OUTCOMES.get(outcome, outcome) if outcome else "готово"}
-        job.next = guide.after(action, dict(params, dry_run=dry_run), outcome, sid, sim, hints)
+        chosen = {"target": exec_params["target"]} if exec_params.get("target") else {}   # модель выбрана
+        job.next = guide.after(action, dict(params, dry_run=dry_run, **chosen), outcome, sid, sim, hints)
         job.finish()
 
     def shutdown(self) -> None:
@@ -940,6 +945,19 @@ def api_catalog_new(h: Handler, q):
         rel = catalog.create(h.app.hood, h.app.cfg, fields, actor=actor(h))
         cid = Path(rel).stem
     h.send_json({"ok": True, "id": cid, "open": rel})
+
+
+# ======================= прибор: начать с переходника =======================
+@route("GET", "/api/connect")
+def api_connect(h: Handler, q):
+    from ..workshop import connect
+    with guide.open_readonly(h.app.cfg, False) as c:          # проверки — про настоящее железо
+        try:
+            v = connect.view(h.app.cfg, q.get("card") or None, c.plugin_report, profiles=c.profiles,
+                             sim=_sim(q))
+        except ValueError as e:
+            return h.fail(404, str(e))
+    h.send_json(v)
 
 
 # ======================= прибор: настройки инструментов =======================

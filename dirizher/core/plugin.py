@@ -17,6 +17,13 @@
 «Прибор → Инструменты → Настроить», проверяются опечатки и обязательные поля. Общие поля (enabled,
 programmer_voltage, extra_args, таймауты) описаны один раз — выберите нужные в `common_settings`,
 свои значения по умолчанию — в `settings_defaults`.
+
+Модель цели из профиля (0.7.0): у профиля чипа может быть поле `tool: {<лезвие>: {ключ: значение}}` —
+настройки лезвия для этой модели (core/target.py). `model_setting` — ключ, которым лезвие называет модель
+(chip, part, device…): если он задан, модель по проводам не узнаётся и Штурман спрашивает её списком
+профилей. `size_setting` — ключ размера, который берётся из `size` профиля, если в `tool:` его нет.
+`image_size(settings)` — размер образа при таких настройках (для сверки с `size` профиля).
+`preflight` — строки шага «Подготовка» для этого лезвия (по умолчанию — общий текст ядра).
 """
 from __future__ import annotations
 
@@ -36,6 +43,10 @@ class Plugin:
     settings_schema: list = []
     common_settings: tuple = settings_mod.COMMON_KEYS
     settings_defaults: dict = {}
+    # Модель цели из профиля (core/target.py) и подготовка именно для этого инструмента.
+    model_setting: str | None = None
+    size_setting: str | None = None
+    preflight: list | None = None
 
     def __init__(self, conductor, settings: dict | None = None):
         self.c = conductor
@@ -53,6 +64,17 @@ class Plugin:
         """Описало ли лезвие свои настройки (settings_schema). Нет — неизвестные ключи не проверяются."""
         return any("settings_schema" in vars(k) for k in cls.__mro__
                    if isinstance(k, type) and issubclass(k, Plugin) and k is not Plugin)
+
+    @classmethod
+    def image_size(cls, settings: dict):
+        """Размер образа (байт) при таких настройках или None (не знаю). Только по настройкам."""
+        if cls.size_setting and settings.get(cls.size_setting) is not None:
+            try:
+                return settings_mod.coerce({"key": cls.size_setting, "title": cls.size_setting, "type": "int"},
+                                           settings[cls.size_setting])
+            except ValueError:
+                return None
+        return None
 
     def available(self) -> tuple:
         return False, "не реализовано"

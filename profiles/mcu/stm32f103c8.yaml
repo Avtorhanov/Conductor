@@ -1,5 +1,6 @@
-# STM32F103C8 («Blue Pill» и многие устройства). Модель задаётся в настройках плагина
-# (probe_rs: chip, openocd: mcu) — по ней и выбирается этот профиль.
+# STM32F103C8 («Blue Pill» и многие устройства). По SWD модель не узнать: выберите её перед сеансом
+# (Штурман спросит списком, или --target stm32f103c8) — настройки лезвий возьмутся из tool: ниже,
+# размер флеша — из size. Можно и по-старому: probe_rs: chip / openocd: mcu в настройках инструмента.
 
 id: stm32f103c8
 name: STMicroelectronics STM32F103C8 (64 КБ флеш, 3.3 В)
@@ -10,6 +11,10 @@ priority: 10
 voltage: 3.3
 size: 65536            # 64 КБ; у части чипов фактически 128 КБ — тогда поменяйте flash_size и size
 allow_write: true
+
+tool:                  # настройки лезвий для этой модели (flash_size = size)
+  probe_rs: {chip: STM32F103C8, flash_base: 0x08000000}
+  openocd: {target: target/stm32f1x.cfg, mcu: STM32F103C8, flash_base: 0x08000000}
 
 checks:
   - stable_read
